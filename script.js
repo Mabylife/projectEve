@@ -1,3 +1,5 @@
+//script.js
+
 setInterval(() => {
   updateDateTime();
 }, 1000); // 每秒更新一次
@@ -58,7 +60,3 @@ function updateDailyQuote() {
     });
 }
 updateDailyQuote();
-
-window.addEventListener('keydown', (e) => {
-  document.body.innerHTML += `<p style="color:green;">Key: ${e.key}</p>`;
-});
