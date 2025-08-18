@@ -11,29 +11,27 @@
       <div class="upperPart">
         <section class="daily_quote">
           <small>/ daily_quote</small>
-          <p class="quote">“Success is not final; failure is not fatal: It is the courage to continue that counts.”</p>
-          <p class="author normal">—Winston Churchill</p>
+          <p class="quote" id="quote"></p>
+          <p class="author normal" id="quote-author"></p>
         </section>
         <section class="status">
           <small>/ status</small>
           <div>
-            <span class="small">Date </span> <span class="normal">8/18 Monday</span>
+            <span class="small">Date </span> <span class="normal" id="date">NaN</span>
             <br />
-            <span class="small">Time </span> <span class="normal">6:48 PM</span>
-            <br />
-            <span></span>
-            <br />
-            <span class="small">Cpu/Gpu/Ram </span> <span class="normal">25%_11%_14%</span>
-            <br />
-            <span class="small">C:/D:/E:/ </span> <span class="normal">47%_14%_15%</span>
+            <span class="small">Time </span> <span class="normal" id="time">NaN</span>
             <br />
             <span></span>
             <br />
-            <span class="small">Power_mode </span> <span class="normal">Turbo</span>
+            <span class="small">C:/D:/E:/ </span> <span class="normal" id="c-d-e">NaN%_NaN%_NaN%</span>
             <br />
-            <span class="small">Recycle_bin </span> <span class="normal">520MB</span>
+            <span></span>
             <br />
-            <span class="small">musicPlaying </span> <span class="normal">True</span>
+            <span class="small">Power_mode </span> <span class="normal" id="power-mode">NaN</span>
+            <br />
+            <span class="small">Recycle_bin </span> <span class="normal" id="recyclebin">NaN</span>
+            <br />
+            <span class="small">musicPlaying </span> <span class="normal" id="music-playing">True</span>
           </div>
         </section>
       </div>
@@ -53,18 +51,19 @@
         </div>
       </section>
     </div>
-    <div class="mediaCard LG">
+    <div class="mediaCard LG" id="mediaCard">
       <small>/ media</small>
-      <img src="assets/songImage.jpg" alt="" />
+      <img id="song-thumbnail" src="assets/songImage.jpg" alt="" />
       <div>
-        <span class="small w86">Song</span> <span class="normal">Drip</span> <br />
-        <span class="small w86">Author</span> <span class="normal">Babymonster</span><br />
+        <div><span class="small w86">Song</span> <span class="normal marquee" id="song-title">Drip</span> <br /></div>
+        <div><span class="small w86">Author</span> <span class="normal marquee" id="song-author">Babymonster</span><br /></div>
         <small></small>
         <br />
-        <span class="small w86">Time</span> <span class="normal">1:27 / 3:25</span>
+        <div><span class="small w86">Time</span> <span class="normal" id="song-time">1:27 / 3:25</span></div>
       </div>
     </div>
 
+    <script src="wallpaper-music.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

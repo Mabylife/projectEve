@@ -118,3 +118,17 @@ body {
   flex-shrink: 0;
   border-radius: 34px;
 }
+
+.mediaCard > div > div {
+  display: flex;
+  justify-content: flex-start;
+  gap: 5px;
+  width: 100%;
+}
+
+.marquee {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
