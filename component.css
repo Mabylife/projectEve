@@ -1,0 +1,39 @@
+.LG {
+  border-radius: 34px;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(20px);
+}
+
+.small,
+small {
+  color: rgba(255, 255, 255, 0.5);
+  font-family: "Space Mono";
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: normal;
+}
+
+.normal,
+p {
+  color: #fff;
+  font-family: "Space Mono";
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: normal;
+}
+
+.quote {
+  color: #fff;
+  font-family: "Space Mono";
+  font-size: 24px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: normal;
+}
+
+.w86 {
+  display: inline-block;
+  width: 86px;
+}
