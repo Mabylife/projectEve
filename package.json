@@ -1,0 +1,28 @@
+{
+  "name": "projecteve",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "devDependencies": {
+    "electron": "^37.3.1"
+  },
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mabylife/projectEve.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Mabylife/projectEve/issues"
+  },
+  "homepage": "https://github.com/Mabylife/projectEve#readme",
+  "dependencies": {
+    "glasstron": "^0.1.1",
+    "mica-electron": "^1.5.16",
+    "path": "^0.12.7"
+  }
+}

@@ -7,7 +7,6 @@ const mediaCard = document.getElementById("mediaCard");
 let contentType;
 
 musicPlaying.textContent = "False";
-mediaCard.style.opacity = "0";
 
 // 歌名/作者/封面/顏色（同原本）
 function wallpaperMediaPropertiesListener(event) {

@@ -1,11 +1,20 @@
 //script.js
+const { ipcRenderer } = require("electron");
+
+ipcRenderer.on("focus-input", () => {
+  document.getElementById("terminalInput").focus();
+});
+
+document.getElementById("terminalInput").addEventListener("blur", () => {
+  document.getElementById("terminalInput").focus();
+});
 
 setInterval(() => {
   updateDateTime();
 }, 1000); // 每秒更新一次
 
 setInterval(() => {
-  updateRecycleBin();
+  updateRecyclebin();
   updateDisk();
 }, 60000); // 每 1 分鐘更新一次
 
