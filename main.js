@@ -1,6 +1,4 @@
 const { app, BrowserWindow, globalShortcut } = require("electron");
-const glasstron = require("glasstron");
-const { setBackgroundColor } = require("glasstron/src/browser_window");
 
 const { PARAMS, VALUE, MicaBrowserWindow, IS_WINDOWS_11, WIN10 } = require("mica-electron");
 const path = require("path");

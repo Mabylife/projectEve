@@ -11,6 +11,7 @@ document.getElementById("terminalInput").addEventListener("blur", () => {
 
 setInterval(() => {
   updateDateTime();
+  updateMediaStatus();
 }, 1000); // 每秒更新一次
 
 setInterval(() => {
@@ -27,7 +28,9 @@ function updateDateTime() {
   let min = now.getMinutes();
   let ampm = hour >= 12 ? "PM" : "AM";
   hour = hour % 12;
-  if (hour === 0) hour = 12;
+  if (hour === 0) {
+    hour = 12;
+  }
   min = min < 10 ? "0" + min : min;
   const timeStr = `${hour}:${min} ${ampm}`;
 
@@ -69,3 +72,18 @@ function updateDailyQuote() {
     });
 }
 updateDailyQuote();
+
+// 播放狀態
+function updateMediaStatus() {
+  fetch("http://localhost:54321/media")
+    .then((res) => res.json())
+    .then((media) => {
+      if (media.state === "4") {
+        document.getElementById("music-playing").textContent = "playing";
+      } else if (media.state === "5") {
+        document.getElementById("music-playing").textContent = "paused";
+      } else {
+        document.getElementById("music-playing").textContent = "stopped";
+      }
+    });
+}
