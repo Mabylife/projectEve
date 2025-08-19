@@ -22,7 +22,7 @@ function createWindow() {
     },
   });
 
-  main.setRoundedCorner();
+  main.setRoundedCorner(); // Rounded
   main.setDarkTheme();
   main.setMicaAcrylicEffect();
   main.alwaysFocused(true); // -> allows you to keep the mica effects even if the window is no focus (decrease performance)
