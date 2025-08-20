@@ -71,6 +71,7 @@ updateDailyQuote();
 
 // 媒體狀態
 let mediaStatus = "stopped";
+let isImmOn = false;
 function updateMediaStatus() {
   mediaStatus = "stopped"; // 預設為 stopped
   fetch("http://localhost:54321/media")
@@ -88,12 +89,12 @@ function updateMediaStatus() {
         mediaStatus = "stopped";
       }
       document.getElementById("music-playing").textContent = mediaStatus;
-      ipcRenderer.send("send-variable", { mediaStatus });
+      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
     })
     .catch((err) => {
       mediaStatus = "stopped";
       document.getElementById("music-playing").textContent = "Error";
-      ipcRenderer.send("send-variable", { mediaStatus });
+      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
     });
 }
 
@@ -170,6 +171,9 @@ document.addEventListener("DOMContentLoaded", () => {
           if (data.isChangeQuote) {
             updateDailyQuote();
           }
+          if (data.isToggleImmMode) {
+            toggleImmMode();
+          }
         })
         .catch((err) => {
           const p = document.createElement("p");
@@ -204,3 +208,40 @@ function autoFocus(isAutoFocusOn) {
   }
 }
 autoFocus(true);
+
+const alphaSection = document.querySelector(".alphaSection");
+let savedAlphaSectionInnerHTML;
+const immAlphaSectionInnerHTML =
+  '<div class="imm">' +
+  '  <small class="fetch-status">/ media</small>' +
+  "  <div>" +
+  '    <img class="song-thumbnail" src="assets/defaultThumbnail.svg" alt="" />' +
+  '    <div class="rightPart">' +
+  '      <div><span class="small">Song</span><span class="normal song-title">--</span></div>' +
+  '      <div><span class="small">Author</span><span class="normal song-author">-- / --</span></div>' +
+  '      <div><span class="small">Time</span><span class="normal song-time">--</span></div>' +
+  '      <p class="normal progress-bar">[--------------------]</p>' +
+  "    </div>" +
+  "  </div>" +
+  "</div>";
+
+function toggleImmMode() {
+  const upperPart = document.querySelector(".upperPart");
+  upperPart.classList.toggle("immOn");
+  upperPart.classList.toggle("immOff");
+  alphaSection.classList.toggle("daily_quote");
+  if (upperPart.classList.contains("immOn")) {
+    if (!savedAlphaSectionInnerHTML) {
+      savedAlphaSectionInnerHTML = alphaSection.innerHTML;
+    }
+    alphaSection.innerHTML = immAlphaSectionInnerHTML;
+    isImmOn = true;
+    ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+  } else {
+    if (savedAlphaSectionInnerHTML) {
+      alphaSection.innerHTML = savedAlphaSectionInnerHTML;
+      isImmOn = false;
+      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+    }
+  }
+}

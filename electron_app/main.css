@@ -7,13 +7,7 @@
   padding: 0;
 }
 
-body {
-}
-
 .mainCard {
-  position: absolute;
-  left: 0;
-  top: 0;
   width: 1200px;
   height: 700px;
   flex-shrink: 0;
@@ -24,7 +18,7 @@ body {
   align-items: flex-start;
 }
 
-.upperPart {
+.upperPart.immOff {
   display: flex;
   gap: 100px;
 }
@@ -105,7 +99,7 @@ body {
   gap: 20px;
 }
 
-.mediaCard > img {
+.song-thumbnail {
   width: 240px;
   height: 240px;
   flex-shrink: 0;
@@ -129,4 +123,55 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.upperPart.immOn {
+  display: flex;
+  gap: 111px;
+}
+
+.upperPart.immOn .imm {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.upperPart.immOn .imm > div {
+  display: flex;
+  justify-content: flex-start;
+  gap: 58px;
+  width: auto;
+  height: 240px;
+}
+
+.upperPart.immOn .imm > div > .rightPart {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.upperPart.immOn .imm > div > .rightPart > div {
+  display: flex;
+  gap: 17px;
+  flex-shrink: 0;
+}
+
+.upperPart.immOn .imm > div > .rightPart > div > .small {
+  width: 74px;
+  flex-shrink: 0;
+}
+
+.upperPart.immOn .imm > div > .rightPart > div > .normal {
+  width: 250px;
+  flex-shrink: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.upperPart.immOn .imm > div > .rightPart > .progress-bar {
+  width: 270px;
 }

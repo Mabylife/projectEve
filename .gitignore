@@ -1,1 +1,4 @@
-node_modules/
+electron_app/node_modules/
+js_server/node_modules/
+py_server/__pycache__/
+py_server/.venv/

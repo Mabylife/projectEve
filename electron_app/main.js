@@ -3,9 +3,10 @@ const { app, BrowserWindow, globalShortcut, ipcMain } = require("electron");
 const { PARAMS, VALUE, MicaBrowserWindow, IS_WINDOWS_11, WIN10 } = require("mica-electron");
 const path = require("path");
 
-let media;
 let isplaying = false;
-let windowVisible = false;
+let isImmOn = false;
+
+let media;
 let main;
 
 function createWindow() {
@@ -13,38 +14,49 @@ function createWindow() {
     resizable: false,
     width: 1200,
     height: 700,
-    x: 680, // 距離螢幕左邊 680px
-    y: 370, // 距離螢幕上方 370px
-    frame: false, // 無邊框
-    transparent: true, // 可半透明
-    skipTaskbar: false, // 不顯示在工作列
-    focusable: true, // 可聚焦
-    alwaysOnTop: true, // 總是位於最上層
+    frame: false,
+    transparent: true,
+    skipTaskbar: true,
+    focusable: true,
+    alwaysOnTop: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
     },
   });
 
-  main.setRoundedCorner(); // Rounded
+  main.setRoundedCorner();
   main.setDarkTheme();
   main.setMicaAcrylicEffect();
-  main.alwaysFocused(true); // -> allows you to keep the mica effects even if the window is no focus (decrease performance)
+  main.alwaysFocused(true);
   main.loadFile("index.html");
 
-  // 預設隱藏
-  main.hide();
+  main.center(); // 先置中
+  main.show();
+  setTimeout(() => {
+    main.hide();
+  }, 100);
+
+  // 取得 main 的位置與尺寸
+  const mainBounds = main.getBounds();
+
+  // 計算 media 的位置
+  const mediaWidth = 300;
+  const mediaHeight = 511;
+  const mediaX = mainBounds.x + mainBounds.width + 30; // main 右邊界 + 30px
+  const mediaY = mainBounds.y + mainBounds.height - mediaHeight; // main 下邊界貼齊
 
   media = new MicaBrowserWindow({
     resizable: false,
-    width: 300,
-    height: 511,
-    x: 1910, // 距離螢幕左邊 1910px
-    y: 559, // 距離螢幕上方 559px
-    frame: false, // 無邊框
-    transparent: true, // 可半透明
-    skipTaskbar: true, // 不顯示在工作列
-    focusable: false, // 可聚焦
+    width: mediaWidth,
+    height: mediaHeight,
+    x: mediaX,
+    y: mediaY,
+    frame: false,
+    transparent: true,
+    skipTaskbar: true,
+    focusable: false,
+    alwaysOnTop: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -56,22 +68,23 @@ function createWindow() {
   media.setMicaAcrylicEffect();
   media.loadFile("mediaCard.html");
 
-  // 預設隱藏
-  media.hide();
+  media.show();
+  setTimeout(() => {
+    media.hide();
+  }, 100);
 
-  // 註冊全域快捷鍵，顯示/隱藏視窗
   globalShortcut.register("CommandOrControl+Space", () => {
     if (main.isVisible()) {
       media.hide();
       main.hide();
       return;
     } else {
-      if (isplaying) {
+      if (isplaying && !isImmOn) {
         media.show();
       }
       main.show();
       main.focus();
-      main.webContents.send("focus-input"); // 傳訊息給 renderer
+      main.webContents.send("focus-input");
       return;
     }
   });
@@ -86,11 +99,16 @@ app.on("will-quit", () => {
 ipcMain.on("send-variable", (event, data) => {
   if (data.mediaStatus == "playing" || data.mediaStatus == "paused") {
     isplaying = true;
+  } else {
+    isplaying = false;
+  }
+  isImmOn = data.isImmOn;
+
+  if (isplaying && !isImmOn) {
     if (main.isVisible()) {
       media.show();
     }
-  } else {
-    isplaying = false;
+  } else if (!isplaying || isImmOn) {
     media.hide();
   }
 });
