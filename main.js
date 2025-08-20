@@ -1,10 +1,16 @@
-const { app, BrowserWindow, globalShortcut } = require("electron");
+const { app, BrowserWindow, globalShortcut, ipcMain } = require("electron");
 
 const { PARAMS, VALUE, MicaBrowserWindow, IS_WINDOWS_11, WIN10 } = require("mica-electron");
 const path = require("path");
 
+let media;
+let isplaying = false;
+let windowVisible = false;
+let main;
+
 function createWindow() {
-  const main = new MicaBrowserWindow({
+  main = new MicaBrowserWindow({
+    resizable: false,
     width: 1200,
     height: 700,
     x: 680, // 距離螢幕左邊 680px
@@ -13,10 +19,10 @@ function createWindow() {
     transparent: true, // 可半透明
     skipTaskbar: false, // 不顯示在工作列
     focusable: true, // 可聚焦
+    alwaysOnTop: true, // 總是位於最上層
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      experimentalFeatures: true,
     },
   });
 
@@ -29,7 +35,8 @@ function createWindow() {
   // 預設隱藏
   main.hide();
 
-  const media = new MicaBrowserWindow({
+  media = new MicaBrowserWindow({
+    resizable: false,
     width: 300,
     height: 511,
     x: 1910, // 距離螢幕左邊 1910px
@@ -41,7 +48,6 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      experimentalFeatures: true,
     },
   });
 
@@ -58,11 +64,15 @@ function createWindow() {
     if (main.isVisible()) {
       media.hide();
       main.hide();
+      return;
     } else {
+      if (isplaying) {
+        media.show();
+      }
       main.show();
-      media.show();
       main.focus();
       main.webContents.send("focus-input"); // 傳訊息給 renderer
+      return;
     }
   });
 }
@@ -71,4 +81,16 @@ app.whenReady().then(createWindow);
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+});
+
+ipcMain.on("send-variable", (event, data) => {
+  if (data.mediaStatus == "playing" || data.mediaStatus == "paused") {
+    isplaying = true;
+    if (main.isVisible()) {
+      media.show();
+    }
+  } else {
+    isplaying = false;
+    media.hide();
+  }
 });

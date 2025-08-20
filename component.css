@@ -36,4 +36,5 @@ p {
 .w86 {
   display: inline-block;
   width: 86px;
+  flex-shrink: 0;
 }

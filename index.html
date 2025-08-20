@@ -17,19 +17,19 @@
         <section class="status">
           <small>/ status</small>
           <div>
-            <span class="small">Date </span> <span class="normal" id="date">NaN</span>
+            <span class="small">Date </span> <span class="normal" id="date">__</span>
             <br />
-            <span class="small">Time </span> <span class="normal" id="time">NaN</span>
-            <br />
-            <span></span>
-            <br />
-            <span class="small">C:/D:/E:/ </span> <span class="normal" id="c-d-e">NaN%_NaN%_NaN%</span>
+            <span class="small">Time </span> <span class="normal" id="time">__</span>
             <br />
             <span></span>
             <br />
-            <span class="small">Power_mode </span> <span class="normal" id="power-mode">NaN</span>
+            <span class="small">C:/D:/E:/ </span> <span class="normal" id="c-d-e">__%__%__%</span>
             <br />
-            <span class="small">Recycle_bin </span> <span class="normal" id="recyclebin">NaN</span>
+            <span></span>
+            <br />
+            <span class="small">Power_mode </span> <span class="normal" id="power-mode">silent</span>
+            <br />
+            <span class="small">Recycle_bin </span> <span class="normal" id="recyclebin">loading_</span>
             <br />
             <span class="small">musicPlaying </span> <span class="normal" id="music-playing">NaN</span>
           </div>
@@ -38,17 +38,26 @@
       <section class="eve_console">
         <small>/ eve_console</small>
         <div class="container">
-          <div class="output" id="terminalOutput"></div>
+          <div class="output" id="terminalOutput">
+            <p class="small">use - or / to use prefix commands</p>
+            <p class="small">use help prefix to get more info</p>
+          </div>
           <div class="inputContainer">
             <span class="normal">> </span>
-            <input class="normal" id="terminalInput" type="text" value="" />
+            <input class="normal" id="terminalInput" spellcheck="false" type="text" value="" />
           </div>
         </div>
       </section>
     </div>
 
+    <style>
+      body {
+        position: relative;
+        width: 1200px;
+        height: 700px;
+      }
+    </style>
 
-    <script src="terminal.js"></script>
     <script src="wallpaper-music.js"></script>
     <script src="script.js"></script>
   </body>

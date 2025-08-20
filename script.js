@@ -5,10 +5,6 @@ ipcRenderer.on("focus-input", () => {
   document.getElementById("terminalInput").focus();
 });
 
-document.getElementById("terminalInput").addEventListener("blur", () => {
-  document.getElementById("terminalInput").focus();
-});
-
 setInterval(() => {
   updateDateTime();
   updateMediaStatus();
@@ -73,17 +69,136 @@ function updateDailyQuote() {
 }
 updateDailyQuote();
 
-// 播放狀態
+// 媒體狀態
+let mediaStatus = "stopped";
 function updateMediaStatus() {
+  mediaStatus = "stopped"; // 預設為 stopped
   fetch("http://localhost:54321/media")
     .then((res) => res.json())
-    .then((media) => {
-      if (media.state === "4") {
-        document.getElementById("music-playing").textContent = "playing";
+    .then((mediaArr) => {
+      // mediaArr is an array, so get the first item
+      const media = mediaArr[0];
+      if (!media || !media.state) {
+        mediaStatus = "stopped";
+      } else if (media.state === "4") {
+        mediaStatus = "playing";
       } else if (media.state === "5") {
-        document.getElementById("music-playing").textContent = "paused";
+        mediaStatus = "paused";
       } else {
-        document.getElementById("music-playing").textContent = "stopped";
+        mediaStatus = "stopped";
       }
+      document.getElementById("music-playing").textContent = mediaStatus;
+      ipcRenderer.send("send-variable", { mediaStatus });
+    })
+    .catch((err) => {
+      mediaStatus = "stopped";
+      document.getElementById("music-playing").textContent = "Error";
+      ipcRenderer.send("send-variable", { mediaStatus });
     });
 }
+
+// 終端指令發送/接收
+document.addEventListener("DOMContentLoaded", () => {
+  const inputEl = document.getElementById("terminalInput");
+  const outputEl = document.getElementById("terminalOutput");
+
+  // 監聽 Enter 鍵
+  inputEl.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      const cmd = inputEl.value.trim();
+      if (!cmd) return;
+
+      // 發送 POST 到 API
+      fetch("http://localhost:12345/terminal/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: cmd }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          // 逐行新增 <p> 到 output 區
+          data.output.forEach((line) => {
+            const p = document.createElement("p");
+            p.className = "small";
+            p.textContent = line;
+            // 根據成功或失敗決定顏色
+            if (data.success === false) {
+              p.style.color = "red";
+            }
+            outputEl.appendChild(p);
+          });
+          // 輸入框清空並 focus
+          inputEl.value = "";
+          inputEl.focus();
+          // 滾動到底部
+          outputEl.scrollTop = outputEl.scrollHeight;
+          // 更新電源模式顯示
+          if (data.isChangePowerMode) {
+            updatePowerMode(data.mode);
+          }
+          // 清空回收桶
+          if (data.isMakeRecycleBinZero) {
+            updateRecyclebin();
+          }
+          // 開關自動聚焦
+          if (data.isAutoFocusOn != null) {
+            autoFocus(data.isAutoFocusOn);
+          }
+          // 清理輸出區
+          if (data.isClearOutput != null && data.isClearOutput) {
+            outputEl.innerHTML = "";
+            if (!data.isFullClear) {
+              const p = document.createElement("p");
+              p.className = "small";
+              p.textContent = "Output cleared";
+              outputEl.appendChild(p);
+            }
+          }
+          if (data.isCopiedQuote) {
+            let currentQuote = document.getElementById("quote").textContent;
+            let currentQuoteAuthor = document.getElementById("quote-author").textContent;
+            let outputQuote = `${currentQuote} ${currentQuoteAuthor}`;
+            navigator.clipboard.writeText(outputQuote).then(() => {
+              const p = document.createElement("p");
+              p.className = "small";
+              p.textContent = "Quote copied";
+              outputEl.appendChild(p);
+            });
+          }
+          if (data.isChangeQuote) {
+            updateDailyQuote();
+          }
+        })
+        .catch((err) => {
+          const p = document.createElement("p");
+          p.className = "small";
+          p.style.color = "red";
+          p.style.opacity = "0.5";
+          p.textContent = "Fetch error: " + err;
+          outputEl.appendChild(p);
+          inputEl.value = "";
+          inputEl.focus();
+        });
+    }
+  });
+});
+
+//更新電源模式
+function updatePowerMode(mode) {
+  const powerMode = document.getElementById("power-mode");
+  powerMode.textContent = mode;
+}
+
+const terminalInputBlurHandler = function () {
+  document.getElementById("terminalInput").focus();
+};
+
+function autoFocus(isAutoFocusOn) {
+  const input = document.getElementById("terminalInput");
+  if (isAutoFocusOn) {
+    input.addEventListener("blur", terminalInputBlurHandler);
+  } else {
+    input.removeEventListener("blur", terminalInputBlurHandler);
+  }
+}
+autoFocus(true);
