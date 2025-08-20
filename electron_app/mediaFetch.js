@@ -24,7 +24,6 @@ setInterval(() => {
   const songTitles = document.querySelectorAll(".song-title");
   const songAuthors = document.querySelectorAll(".song-author");
   const songTimes = document.querySelectorAll(".song-time");
-  const fetchStatuses = document.querySelectorAll(".fetch-status");
   const progressBar = document.querySelector(".progress-bar");
 
   fetch("http://localhost:54321/media")
@@ -34,7 +33,6 @@ setInterval(() => {
       title = media.title || "--";
       author = media.artist || "--";
       // 更新你的 DOM
-      fetchStatuses.forEach((status) => (status.textContent = "/ media - fetched"));
       songTitles.forEach((titleElem) => (titleElem.textContent = title));
       songAuthors.forEach((authorElem) => (authorElem.textContent = author));
       songThumbnails.forEach((thumbnailElem) => (thumbnailElem.src = media.thumbnail || "assets/defaultThumbnail.svg")); // 預設縮圖

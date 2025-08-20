@@ -101,7 +101,7 @@ function start() {
           return { output: [`Unknown command for mode prefix: ${cmd}`], success: false };
       }
       try {
-        await exec(`pwsh.exe -Command "${psCommand}"`, { windowsHide: true });
+        await exec(`pwsh.exe -Command "${psCommand}"`, { windowsHide: true, cwd: __dirname });
         return {
           output: [`Power mode change to ${mode}`],
           success: true,
@@ -156,7 +156,7 @@ function start() {
           return { output: [`Unknown command for media prefix: ${cmd}`], success: false };
       }
       try {
-        await exec(`pwsh.exe -Command "${psCommand}"`, { windowsHide: true });
+        await exec(`pwsh.exe -Command "${psCommand}"`, { windowsHide: true, cwd: __dirname });
         return { output: [mode], success: true };
       } catch (err) {
         return { output: [`Failed to control media: ${err.message}`], success: false };

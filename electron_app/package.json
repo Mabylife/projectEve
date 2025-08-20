@@ -28,21 +28,33 @@
     "appId": "com.yourcompany.projecteve",
     "productName": "ProjectEve",
     "files": [
-      "main.js",
-      "package.json",
-      "index.html",
-      "mediaCard.html",
-      "component.css",
-      "main.css",
-      "mediaFetch.js",
-      "script.js",
-      "icons/**/*",
-      "assets/**/*",
-      "servers/"
+      "**/*"
     ],
-    "extraResources": [],
-    "asar": true,
+    "asar": false,
+    "extraResources": [
+      {
+        "from": "node_modules/express",
+        "to": "node_modules/express"
+      },
+      {
+        "from": "node_modules/systeminformation",
+        "to": "node_modules/systeminformation"
+      },
+      {
+        "from": "node_modules/active-win",
+        "to": "node_modules/active-win"
+      },
+      {
+        "from": "node_modules/mathjs",
+        "to": "node_modules/mathjs"
+      },
+      {
+        "from": "node_modules/cheerio",
+        "to": "node_modules/cheerio"
+      }
+    ],
     "win": {
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "portable",

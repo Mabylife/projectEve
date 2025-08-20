@@ -44,12 +44,24 @@ let backendIssueFlag = false;
 // JS 嵌入狀態
 let jsEmbeddedStarted = false;
 
-// ------------------ 路徑工具 ------------------
-function extResourcePath(...segments) {
-  return app.isPackaged ? path.join(process.resourcesPath, ...segments) : path.join(__dirname, ...segments);
-}
-function appAssetPath(...segments) {
-  return path.join(__dirname, ...segments);
+const isPackaged = app.isPackaged;
+const basePath = isPackaged ? process.resourcesPath : __dirname;
+
+// 統一路徑工具
+function resourcePath(...segments) {
+  if (isPackaged) {
+    // 1. 先找 unpack 路徑（如 exe、ahk、lnk、png、html 等會被解壓的檔案）
+    const unpackPath = path.join(process.resourcesPath, "app.asar.unpacked", ...segments);
+    if (fs.existsSync(unpackPath)) return unpackPath;
+    // 2. 再找 asar 內部路徑（如 js、css、json、部分圖片等純文字檔案）
+    const asarPath = path.join(process.resourcesPath, ...segments);
+    if (fs.existsSync(asarPath)) return asarPath;
+    // 3. fallback: 直接回傳 unpackPath（讓錯誤明確）
+    return unpackPath;
+  } else {
+    // 開發模式直接用原始路徑
+    return path.join(__dirname, ...segments);
+  }
 }
 
 // ------------------ 日誌 ------------------
@@ -120,7 +132,7 @@ async function startPythonServer() {
     return;
   }
 
-  const exe = extResourcePath("servers", "server.exe");
+  const exe = resourcePath("servers", "server.exe");
   if (!fs.existsSync(exe)) {
     writeLog("PY", `缺少 server.exe: ${exe}`);
     backendIssueFlag = true;
@@ -234,7 +246,7 @@ function startEmbeddedJsServer() {
     writeLog("JS-EMBED", "已啟動，跳過");
     return;
   }
-  const entry = extResourcePath("servers", "js", "jsserver.js");
+  const entry = resourcePath("servers", "js", "jsserver.js");
   if (!fs.existsSync(entry)) {
     writeLog("JS-EMBED", `缺少 jsserver.js: ${entry}`);
     backendIssueFlag = true;
@@ -310,7 +322,7 @@ function createWindowsIfNeeded() {
     writeLog("MICA", "主視窗效果設定失敗: " + e.message);
   }
 
-  const indexHtml = appAssetPath("index.html");
+  const indexHtml = resourcePath("index.html");
   if (fs.existsSync(indexHtml)) mainWin.loadFile(indexHtml);
   else writeLog("WIN", "缺少 index.html: " + indexHtml);
 
@@ -334,7 +346,7 @@ function createWindowsIfNeeded() {
     writeLog("MICA", "媒體視窗效果設定失敗: " + e.message);
   }
 
-  const mediaHtml = appAssetPath("mediaCard.html");
+  const mediaHtml = resourcePath("mediaCard.html");
   if (fs.existsSync(mediaHtml)) mediaWin.loadFile(mediaHtml);
   else writeLog("WIN", "缺少 mediaCard.html: " + mediaHtml);
 
@@ -433,9 +445,9 @@ function refreshTrayMenu() {
   if (tray) tray.setContextMenu(buildTrayMenu());
 }
 function createTray() {
-  let iconPath = appAssetPath("icons", "tray_icon.png");
+  let iconPath = resourcePath("icons", "tray_icon.png");
   if (!fs.existsSync(iconPath)) {
-    const icoFallback = appAssetPath("icons", "app.ico");
+    const icoFallback = resourcePath("icons", "app.ico");
     if (fs.existsSync(icoFallback)) iconPath = icoFallback;
   }
   if (!fs.existsSync(iconPath)) {
