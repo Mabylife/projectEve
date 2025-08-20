@@ -12,16 +12,16 @@
     "build": "electron-builder --win portable"
   },
   "dependencies": {
-    "@electron/rebuild": "^4.0.1",
     "active-win": "^8.2.1",
     "cheerio": "^1.1.2",
-    "electron-builder": "^26.0.12",
     "express": "^5.1.0",
     "mathjs": "^14.6.0",
     "mica-electron": "^1.5.16",
     "systeminformation": "^5.27.7"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
+    "electron-builder": "^26.0.12",
     "electron": "^37.3.1"
   },
   "build": {
