@@ -14,11 +14,17 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
-    "mica-electron": "^1.7.1"
+    "active-win": "^7.7.2",
+    "cheerio": "^1.1.2",
+    "express": "^5.1.0",
+    "mathjs": "^14.6.0",
+    "mica-electron": "1.5.16",
+    "systeminformation": "^5.27.7"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
     "electron": "30.5.1",
-    "electron-builder": "24.0.0"
+    "electron-builder": "^24.13.3"
   },
   "build": {
     "appId": "com.yourcompany.projecteve",

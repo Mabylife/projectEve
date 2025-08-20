@@ -1,6 +1,9 @@
-// main.js
-// 要點：不做任何「預熱 / prime」，保留 autoShowFirstToggle = true。
-// 退出時透過 fetch /shutdown 讓 Python 優雅關閉；失敗才 fallback taskkill。
+// main.js (方案A：JS server 嵌入主進程，不再額外 spawn Electron/Node 子進程)
+// - 不做 Mica 預熱，保留 autoShowFirstToggle 行為
+// - Python 仍為獨立 server.exe，優雅關閉 /shutdown
+// - JS server 改為 require 方式嵌入，避免多實例造成視窗狂閃
+//
+// 若需重新啟動 JS server，可在 restartServices 中加入自定 reload 邏輯 (目前僅重啟 Python)
 
 const { app, Tray, Menu, dialog, shell, globalShortcut, nativeImage, ipcMain } = require("electron");
 const path = require("path");
@@ -17,29 +20,31 @@ try {
   micaLoadError = e;
 }
 
-// ------------------ 全域狀態 ------------------
+// ------------------ 狀態 ------------------
 let tray = null;
 let pyProc = null;
-let jsProc = null;
 let mainWin = null;
 let mediaWin = null;
 
 let isPlaying = false;
 let isImmOn = false;
 let windowsVisible = false;
-const autoShowFirstToggle = true; // 保留你的設定
+const autoShowFirstToggle = true;
 
 const PY_PORT = 54321;
 const MAX_RESTART = 5;
 let pyRestartCount = 0;
-let jsRestartCount = 0;
+
 let lastPyStart = 0;
 let restarting = false;
 let exiting = false;
 const isDev = !app.isPackaged;
 let backendIssueFlag = false;
 
-// ------------------ 工具：路徑 ------------------
+// JS 嵌入狀態
+let jsEmbeddedStarted = false;
+
+// ------------------ 路徑工具 ------------------
 function extResourcePath(...segments) {
   return app.isPackaged ? path.join(process.resourcesPath, ...segments) : path.join(__dirname, ...segments);
 }
@@ -66,7 +71,7 @@ function debugPaths() {
   writeLog("MICA", micaLoadError ? "載入失敗: " + micaLoadError.message : "載入成功");
 }
 
-// ------------------ 工具：Port/Process ------------------
+// ------------------ Port / Process 工具 ------------------
 function isPortInUse(port) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
@@ -186,23 +191,19 @@ async function gracefulStopPython(options = {}) {
   }
 
   writeLog("PY", "送出 /shutdown");
-  let fetchOk = false;
   try {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 2000);
-    // Node 18+ 有全域 fetch
     const res = await fetch(`http://127.0.0.1:${PY_PORT}/shutdown`, {
       method: "POST",
       signal: controller.signal,
     });
     clearTimeout(id);
-    fetchOk = res.ok;
-    writeLog("PY", "shutdown 呼叫結果 ok=" + fetchOk);
+    writeLog("PY", "shutdown 呼叫結果 ok=" + res.ok);
   } catch (e) {
     writeLog("PY-ERR", "shutdown 呼叫失敗: " + e.message);
   }
 
-  // 等待 port 關閉
   const startWait = Date.now();
   while (Date.now() - startWait < timeoutMs) {
     if (!(await isPortInUse(PY_PORT))) {
@@ -214,7 +215,6 @@ async function gracefulStopPython(options = {}) {
   }
 
   writeLog("PY", "gracefulStop: 超時仍未釋放");
-
   if (fallbackKill) {
     writeLog("PY", "執行 fallback 強制殺");
     if (pyProc && !pyProc.killed) {
@@ -224,96 +224,63 @@ async function gracefulStopPython(options = {}) {
       } catch {}
     }
     pyProc = null;
-    // 只針對 server.exe，避免誤殺其他 python 工作
     taskkillByName("server.exe", "PY-KILL");
   }
 }
 
-// ------------------ JS Server ------------------
-function startJsServer() {
-  if (jsProc && !jsProc.killed) {
-    writeLog("JS", "已有 jsProc，跳過");
+// ------------------ JS 嵌入式啟動 ------------------
+function startEmbeddedJsServer() {
+  if (jsEmbeddedStarted) {
+    writeLog("JS-EMBED", "已啟動，跳過");
     return;
   }
   const entry = extResourcePath("servers", "js", "jsserver.js");
   if (!fs.existsSync(entry)) {
-    writeLog("JS", `缺少 jsserver.js: ${entry}`);
+    writeLog("JS-EMBED", `缺少 jsserver.js: ${entry}`);
     backendIssueFlag = true;
     refreshTrayMenu();
     return;
   }
-  writeLog("JS", `啟動 ${entry}`);
   try {
-    jsProc = spawn(process.execPath, [entry], {
-      cwd: path.dirname(entry),
-      env: { ...process.env, NODE_ENV: isDev ? "development" : "production" },
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
+    const mod = require(entry);
+    if (mod && typeof mod.start === "function") {
+      mod.start();
+      jsEmbeddedStarted = true;
+      writeLog("JS-EMBED", "啟動完成 (嵌入)");
+    } else {
+      writeLog("JS-EMBED-ERR", "模組未匯出 start()");
+    }
   } catch (e) {
-    writeLog("JS-ERR", "spawn 失敗: " + e.message);
+    writeLog("JS-EMBED-ERR", "載入失敗: " + e.stack);
     backendIssueFlag = true;
     refreshTrayMenu();
-    return;
   }
-  writeLog("JS-PID", `pid=${jsProc.pid}`);
-
-  jsProc.stdout.on("data", (d) => writeLog("JS", d.toString().trim()));
-  jsProc.stderr.on("data", (d) => writeLog("JS-ERR", d.toString().trim()));
-  jsProc.on("exit", (code, signal) => {
-    writeLog("JS", `退出 code=${code} signal=${signal}`);
-    jsProc = null;
-    if (code !== 0 && jsRestartCount < MAX_RESTART && !exiting) {
-      jsRestartCount++;
-      backendIssueFlag = true;
-      refreshTrayMenu();
-      setTimeout(() => {
-        writeLog("JS", `自動重啟 (${jsRestartCount}/${MAX_RESTART})`);
-        startJsServer();
-      }, 1500);
-    } else if (code === 0) {
-      backendIssueFlag = backendIssueFlag || false;
-      refreshTrayMenu();
-    }
-  });
 }
 
-function stopJsServer(final = true) {
-  if (jsProc && !jsProc.killed) {
-    writeLog("JS", "停止");
-    try {
-      jsProc.kill();
-    } catch (e) {
-      writeLog("JS-ERR", e.message);
-    }
-  }
-  jsProc = null;
-  if (final) jsRestartCount = MAX_RESTART;
-}
-
-// ------------------ 重啟 ------------------
+// ------------------ 重啟服務 (僅重啟 Python) ------------------
 function restartServices() {
   if (restarting) {
     writeLog("SYS", "忽略：正在重啟中");
     return;
   }
   restarting = true;
-  writeLog("SYS", "重啟服務");
+  writeLog("SYS", "重啟服務 (Python)");
+
+  // 若你希望也能“重載”JS：可在這裡清除 require cache 再調 startEmbeddedJsServer()
+  // 目前 JS 嵌入後不重啟，除非程式碼有特殊需求
   pyRestartCount = 0;
-  jsRestartCount = 0;
   backendIssueFlag = false;
   refreshTrayMenu();
-  stopJsServer(false);
+
   gracefulStopPython({ timeoutMs: 2500, fallbackKill: true }).then(() => {
     setTimeout(() => {
       startPythonServer();
-      startJsServer();
       restarting = false;
     }, 600);
   });
 }
 
-// ------------------ 視窗 (無預熱，只初始顯示/隱藏一次) ------------------
+// ------------------ 視窗 ------------------
 function createWindowsIfNeeded() {
   if (mainWin || mediaWin) return;
   if (micaLoadError || !MicaBrowserWindow) {
@@ -401,14 +368,12 @@ function showWindows() {
 
   windowsVisible = true;
   mainWin.webContents.send("focus-input");
-  writeLog("WIN", "顯示視窗");
 }
 
 function hideWindows() {
   if (mainWin) mainWin.hide();
   if (mediaWin) mediaWin.hide();
   windowsVisible = false;
-  writeLog("WIN", "隱藏視窗");
 }
 
 function toggleWindows() {
@@ -450,7 +415,7 @@ function buildTrayMenu() {
             `isImmOn: ${isImmOn}\n` +
             `windowsVisible: ${windowsVisible}\n` +
             `pyRestartCount: ${pyRestartCount}\n` +
-            `jsRestartCount: ${jsRestartCount}\n`,
+            `jsEmbeddedStarted: ${jsEmbeddedStarted}\n`,
         });
       },
     },
@@ -508,7 +473,6 @@ ipcMain.on("send-variable", (event, data) => {
     const status = data.mediaStatus;
     isPlaying = status === "playing" || status === "paused";
     isImmOn = !!data.isImmOn;
-    writeLog("IPC", `更新 isPlaying=${isPlaying} isImmOn=${isImmOn}`);
     updateMediaVisibility();
   } catch (e) {
     writeLog("IPC-ERR", "處理 send-variable 失敗: " + e.message);
@@ -531,11 +495,10 @@ app.whenReady().then(() => {
   debugPaths();
   createTray();
   registerShortcuts();
+  startEmbeddedJsServer();
   startPythonServer();
-  startJsServer();
   createWindowsIfNeeded();
   if (autoShowFirstToggle) {
-    // 你的原始「閃一下」行為
     if (mediaWin) mediaWin.show();
     if (mainWin) mainWin.show();
     setTimeout(() => {
@@ -545,28 +508,17 @@ app.whenReady().then(() => {
   }
 });
 
-// ------------------ 優雅退出 ------------------
+// ------------------ 退出 ------------------
 async function cleanExit() {
   if (exiting) return;
   exiting = true;
   writeLog("SYS", "應用程式退出");
-  // 防止自動重啟
   pyRestartCount = MAX_RESTART;
-  jsRestartCount = MAX_RESTART;
-
-  // 先停 JS
-  stopJsServer(true);
-  // 優雅關閉 Python
-  await gracefulStopPython({
-    timeoutMs: 4000,
-    fallbackKill: true,
-  });
-
   globalShortcut.unregisterAll();
+  await gracefulStopPython({ timeoutMs: 4000, fallbackKill: true });
 }
 
 app.on("before-quit", (e) => {
-  // 確保 async 動作完成
   if (!exiting) {
     e.preventDefault();
     cleanExit().then(() => {
