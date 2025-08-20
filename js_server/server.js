@@ -72,17 +72,17 @@ const customPrefixes = {
     switch (cmd) {
       case "silent":
       case "sil":
-        psCommand = `try { Start-Process -FilePath "hotkeys/mode1.ahk" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
+        psCommand = `try { Start-Process -FilePath "hotkeys/mode1.exe" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
         mode = "silent";
         break;
       case "balanced":
       case "bal":
-        psCommand = `try { Start-Process -FilePath "hotkeys/mode2.ahk" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
+        psCommand = `try { Start-Process -FilePath "hotkeys/mode2.exe" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
         mode = "balanced";
         break;
       case "turbo":
       case "tur":
-        psCommand = `try { Start-Process -FilePath "hotkeys/mode3.ahk" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
+        psCommand = `try { Start-Process -FilePath "hotkeys/mode3.exe" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
         mode = "turbo";
         break;
       case "help":
@@ -117,16 +117,16 @@ const customPrefixes = {
     let mode;
     switch (cmd) {
       case "p":
-        psCommand = `try { Start-Process -FilePath "hotkeys/play_pause.ahk" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
+        psCommand = `try { Start-Process -FilePath "hotkeys/play_pause.exe" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
         mode = "media played/paused";
         break;
       case "next":
-        psCommand = `try { Start-Process -FilePath "hotkeys/next.ahk" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
+        psCommand = `try { Start-Process -FilePath "hotkeys/next.exe" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
         mode = "media switched to next";
         break;
       case "previous":
       case "prev":
-        psCommand = `try { Start-Process -FilePath "hotkeys/previous.ahk" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
+        psCommand = `try { Start-Process -FilePath "hotkeys/previous.exe" -ErrorAction Stop } catch { Write-Output $_.Exception.Message; exit 1 }`;
         mode = "media switched to previous";
         break;
       case "yt":
@@ -350,7 +350,7 @@ app.post("/terminal/run", async (req, res) => {
 // 伺服器啟動前，先切換靜音模式
 (async () => {
   try {
-    await exec("pwsh.exe -Command \"Start-Process -FilePath 'hotkeys/mode1.ahk' -ErrorAction Stop\"");
+    await exec("pwsh.exe -Command \"Start-Process -FilePath 'hotkeys/mode1.exe' -ErrorAction Stop\"");
     console.log("已切換至靜音模式");
   } catch (e) {
     console.error("靜音模式切換失敗", e);
