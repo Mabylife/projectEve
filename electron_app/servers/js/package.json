@@ -1,0 +1,9 @@
+{
+  "name": "project-eve-jsserver",
+  "version": "1.0.0",
+  "private": true,
+  "main": "jsserver.js",
+  "dependencies": {
+    "express": "^4.19.0"
+  }
+}

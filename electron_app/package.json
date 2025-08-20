@@ -1,28 +1,50 @@
 {
-  "name": "projecteve",
+  "name": "project-eve",
   "version": "1.0.0",
-  "description": "",
   "main": "main.js",
-  "devDependencies": {
-    "electron": "^37.3.1"
-  },
+  "private": true,
   "scripts": {
-    "start": "electron ."
+    "dev": "electron .",
+    "build": "electron-builder --win portable"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Mabylife/projectEve.git"
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/Mabylife/projectEve/issues"
-  },
-  "homepage": "https://github.com/Mabylife/projectEve#readme",
-  "dependencies": {
-    "glasstron": "^0.1.1",
-    "mica-electron": "^1.5.16",
-    "path": "^0.12.7"
+  "build": {
+    "appId": "com.yourcompany.projecteve",
+    "productName": "ProjectEve",
+    "files": [
+      "main.js",
+      "package.json",
+      "icons/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "servers/",
+        "to": "servers",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "servers/**/*.exe"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icons/app.ico"
+    },
+    "portable": {
+      "artifactName": "ProjectEve-Portable-${version}.exe"
+    }
   }
 }
