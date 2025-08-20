@@ -23,7 +23,7 @@ function updateDateTime() {
   let hour = now.getHours();
   let min = now.getMinutes();
   let ampm = hour >= 12 ? "PM" : "AM";
-  hour = hour % 12;
+  hour %= 12;
   if (hour === 0) {
     hour = 12;
   }
@@ -106,7 +106,9 @@ document.addEventListener("DOMContentLoaded", () => {
   inputEl.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
       const cmd = inputEl.value.trim();
-      if (!cmd) return;
+      if (!cmd) {
+        return;
+      }
 
       // 發送 POST 到 API
       fetch("http://localhost:12345/terminal/run", {
