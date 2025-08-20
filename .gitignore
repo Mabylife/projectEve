@@ -4,3 +4,4 @@ py_server/__pycache__/
 py_server/.venv/
 py_server/build/
 py_server/dist/
+electron_app/dist/

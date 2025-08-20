@@ -1,5 +1,8 @@
 @import url(component.css);
-@import url("https://fonts.googleapis.com/css2?family=Space+Mono&display=swap");
+@font-face {
+  font-family: "Space Mono";
+  src: url("assets/SpaceMono-Regular.ttf") format("truetype");
+}
 
 * {
   box-sizing: border-box;

@@ -4,6 +4,13 @@
   "private": true,
   "main": "jsserver.js",
   "dependencies": {
-    "express": "^4.19.0"
+    "active-win": "^8.2.1",
+    "cheerio": "^1.1.2",
+    "child-process": "^1.0.2",
+    "express": "^4.19.0",
+    "fs": "^0.0.1-security",
+    "mathjs": "^14.6.0",
+    "systeminformation": "^5.27.7",
+    "util": "^0.12.5"
   }
 }

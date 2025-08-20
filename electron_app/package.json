@@ -1,15 +1,24 @@
 {
   "name": "project-eve",
-  "version": "1.0.0",
+  "version": "1.1.1",
+  "description": "Project Eve - Life quality terminal",
+  "author": "Mabylife",
+  "license": "MIT",
   "main": "main.js",
   "private": true,
   "scripts": {
     "dev": "electron .",
-    "build": "electron-builder --win portable"
+    "start": "electron .",
+    "build": "electron-builder --win portable",
+    "build:dir": "electron-builder --dir",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "mica-electron": "^1.7.1"
   },
   "devDependencies": {
-    "electron": "^30.0.0",
-    "electron-builder": "^24.0.0"
+    "electron": "30.5.1",
+    "electron-builder": "24.0.0"
   },
   "build": {
     "appId": "com.yourcompany.projecteve",
@@ -17,7 +26,14 @@
     "files": [
       "main.js",
       "package.json",
-      "icons/**/*"
+      "index.html",
+      "mediaCard.html",
+      "component.css",
+      "main.css",
+      "mediaFetch.js",
+      "script.js",
+      "icons/**/*",
+      "assets/**/*"
     ],
     "extraResources": [
       {
@@ -29,9 +45,6 @@
       }
     ],
     "asar": true,
-    "asarUnpack": [
-      "servers/**/*.exe"
-    ],
     "win": {
       "target": [
         {
@@ -46,5 +59,8 @@
     "portable": {
       "artifactName": "ProjectEve-Portable-${version}.exe"
     }
+  },
+  "engines": {
+    "node": ">=18.17"
   }
 }
