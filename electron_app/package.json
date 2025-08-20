@@ -1,6 +1,6 @@
 {
   "name": "project-eve",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Project Eve - Life quality terminal",
   "author": "Mabylife",
   "license": "MIT",
@@ -21,8 +21,8 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
-    "electron-builder": "^26.0.12",
-    "electron": "^37.3.1"
+    "electron": "^37.3.1",
+    "electron-builder": "^26.0.12"
   },
   "build": {
     "appId": "com.yourcompany.projecteve",
@@ -37,17 +37,10 @@
       "mediaFetch.js",
       "script.js",
       "icons/**/*",
-      "assets/**/*"
+      "assets/**/*",
+      "servers/"
     ],
-    "extraResources": [
-      {
-        "from": "servers/",
-        "to": "servers",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
+    "extraResources": [],
     "asar": true,
     "win": {
       "target": [
@@ -65,6 +58,6 @@
     }
   },
   "engines": {
-    "node": ">=18.17"
+    "node": ">=22.18.0"
   }
 }
