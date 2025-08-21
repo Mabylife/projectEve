@@ -10,6 +10,7 @@ const path = require("path");
 const fs = require("fs");
 const { spawn, exec } = require("child_process");
 const net = require("net");
+const isPyPacked = true;
 
 // ------------------ Mica ------------------
 let MicaBrowserWindow;
@@ -103,6 +104,11 @@ function taskkillByName(name, label, cb = () => {}) {
 
 // ------------------ Python 啟動 ------------------
 async function startPythonServer() {
+  if (!isPyPacked) {
+    writeLog("PY", "未打包，跳過啟動");
+    return;
+  }
+
   const now = Date.now();
   if (now - lastPyStart < 3000) {
     writeLog("PY", "啟動被節流 (3s 內)");
