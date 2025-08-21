@@ -180,9 +180,9 @@ function updateMediaStatus() {
       const media = mediaArr[0];
       if (!media || !media.state) {
         mediaStatus = "stopped";
-      } else if (media.state === "4") {
+      } else if (media.state === "4" || media.state === "Playing") {
         mediaStatus = "playing";
-      } else if (media.state === "5") {
+      } else if (media.state === "5" || media.state === "Paused") {
         mediaStatus = "paused";
       } else {
         mediaStatus = "stopped";
