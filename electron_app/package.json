@@ -32,7 +32,6 @@
     ],
     "asar": false,
     "win": {
-      "signAndEditExecutable": false,
       "target": [
         {
           "target": "portable",
