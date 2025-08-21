@@ -24,7 +24,7 @@ setInterval(() => {
   const songTitles = document.querySelectorAll(".song-title");
   const songAuthors = document.querySelectorAll(".song-author");
   const songTimes = document.querySelectorAll(".song-time");
-  const progressBar = document.querySelector(".progress-bar");
+  const progressBars = document.querySelectorAll(".progress-bar");
 
   fetch("http://localhost:54321/media")
     .then((res) => res.json())
@@ -37,6 +37,8 @@ setInterval(() => {
       songAuthors.forEach((authorElem) => (authorElem.textContent = author));
       songThumbnails.forEach((thumbnailElem) => (thumbnailElem.src = media.thumbnail || "assets/defaultThumbnail.svg")); // 預設縮圖
       songTimes.forEach((timeElem) => (timeElem.textContent = `${formatSec(media.position)} / ${formatSec(media.duration)}`));
-      progressBar.textContent = renderProgressBar(media.position, media.duration);
+      progressBars.forEach((progressBar) => {
+        progressBar.textContent = renderProgressBar(media.position, media.duration);
+      });
     });
 }, 1000);
