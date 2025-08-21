@@ -15,87 +15,12 @@ setInterval(() => {
   updateDisk();
 }, 60000); // 每 1 分鐘更新一次
 
-function updateDateTime() {
-  const now = new Date();
-  const weekday = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const dateStr = `${now.getMonth() + 1}/${now.getDate()} ${weekday[now.getDay()]}`;
-
-  let hour = now.getHours();
-  let min = now.getMinutes();
-  let ampm = hour >= 12 ? "PM" : "AM";
-  hour %= 12;
-  if (hour === 0) {
-    hour = 12;
-  }
-  min = min < 10 ? "0" + min : min;
-  const timeStr = `${hour}:${min} ${ampm}`;
-
-  document.getElementById("date").textContent = dateStr;
-  document.getElementById("time").textContent = timeStr;
-}
-updateDateTime();
-
-// 更新磁碟容量（每 3 分鐘）
-function updateDisk() {
-  fetch("http://localhost:54321/disk")
-    .then((res) => res.json())
-    .then((data) => {
-      document.getElementById("c-d-e").textContent = `${data["C:"]}%_${data["D:"]}%_${data["E:"]}%`;
-    })
-    .catch((err) => {
-      document.getElementById("c-d-e").textContent = "Error";
-    });
-}
-updateDisk();
-
-// 回收桶容量
-function updateRecyclebin() {
-  fetch("http://localhost:54321/recyclebin")
-    .then((res) => res.json())
-    .then((data) => {
-      document.getElementById("recyclebin").textContent = data.recyclebinMB + " MB";
-    });
-}
-updateRecyclebin();
-
-// 每日金句
-function updateDailyQuote() {
-  fetch("http://localhost:54321/dailyquote")
-    .then((res) => res.json())
-    .then((data) => {
-      document.getElementById("quote").textContent = data.quote;
-      document.getElementById("quote-author").textContent = "— " + data.author;
-    });
-}
-updateDailyQuote();
-
-// 媒體狀態
-let mediaStatus = "stopped";
-let isImmOn = false;
-function updateMediaStatus() {
-  mediaStatus = "stopped"; // 預設為 stopped
-  fetch("http://localhost:54321/media")
-    .then((res) => res.json())
-    .then((mediaArr) => {
-      // mediaArr is an array, so get the first item
-      const media = mediaArr[0];
-      if (!media || !media.state) {
-        mediaStatus = "stopped";
-      } else if (media.state === "4") {
-        mediaStatus = "playing";
-      } else if (media.state === "5") {
-        mediaStatus = "paused";
-      } else {
-        mediaStatus = "stopped";
-      }
-      document.getElementById("music-playing").textContent = mediaStatus;
-      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
-    })
-    .catch((err) => {
-      mediaStatus = "stopped";
-      document.getElementById("music-playing").textContent = "Error";
-      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
-    });
+function reconnect() {
+  updateDateTime();
+  updateDisk();
+  updateRecyclebin();
+  updateDailyQuote();
+  updateMediaStatus();
 }
 
 // 終端指令發送/接收
@@ -174,6 +99,9 @@ document.addEventListener("DOMContentLoaded", () => {
           if (data.isToggleImmMode) {
             toggleImmMode();
           }
+          if (data.isReconnect) {
+            reconnect();
+          }
         })
         .catch((err) => {
           const p = document.createElement("p");
@@ -188,6 +116,86 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
+// 更新日期時間
+function updateDateTime() {
+  const now = new Date();
+  const weekday = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const dateStr = `${now.getMonth() + 1}/${now.getDate()} ${weekday[now.getDay()]}`;
+
+  let hour = now.getHours();
+  let min = now.getMinutes();
+  let ampm = hour >= 12 ? "PM" : "AM";
+  hour %= 12;
+  if (hour === 0) {
+    hour = 12;
+  }
+  min = min < 10 ? "0" + min : min;
+  const timeStr = `${hour}:${min} ${ampm}`;
+
+  document.getElementById("date").textContent = dateStr;
+  document.getElementById("time").textContent = timeStr;
+}
+
+// 更新磁碟容量（每 3 分鐘）
+function updateDisk() {
+  fetch("http://localhost:54321/disk")
+    .then((res) => res.json())
+    .then((data) => {
+      document.getElementById("c-d-e").textContent = `${data["C:"]}%_${data["D:"]}%_${data["E:"]}%`;
+    })
+    .catch((err) => {
+      document.getElementById("c-d-e").textContent = "Error";
+    });
+}
+
+// 回收桶容量
+function updateRecyclebin() {
+  fetch("http://localhost:54321/recyclebin")
+    .then((res) => res.json())
+    .then((data) => {
+      document.getElementById("recyclebin").textContent = data.recyclebinMB + " MB";
+    });
+}
+
+// 每日金句
+function updateDailyQuote() {
+  fetch("http://localhost:54321/dailyquote")
+    .then((res) => res.json())
+    .then((data) => {
+      document.getElementById("quote").textContent = data.quote;
+      document.getElementById("quote-author").textContent = "— " + data.author;
+    });
+}
+
+// 媒體狀態
+let mediaStatus = "stopped";
+let isImmOn = false;
+function updateMediaStatus() {
+  mediaStatus = "stopped"; // 預設為 stopped
+  fetch("http://localhost:54321/media")
+    .then((res) => res.json())
+    .then((mediaArr) => {
+      // mediaArr is an array, so get the first item
+      const media = mediaArr[0];
+      if (!media || !media.state) {
+        mediaStatus = "stopped";
+      } else if (media.state === "4") {
+        mediaStatus = "playing";
+      } else if (media.state === "5") {
+        mediaStatus = "paused";
+      } else {
+        mediaStatus = "stopped";
+      }
+      document.getElementById("music-playing").textContent = mediaStatus;
+      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+    })
+    .catch((err) => {
+      mediaStatus = "stopped";
+      document.getElementById("music-playing").textContent = "Error";
+      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+    });
+}
 
 //更新電源模式
 function updatePowerMode(mode) {
@@ -209,6 +217,7 @@ function autoFocus(isAutoFocusOn) {
 }
 autoFocus(true);
 
+// 更新immersive模式
 const alphaSection = document.querySelector(".alphaSection");
 let savedAlphaSectionInnerHTML;
 const immAlphaSectionInnerHTML =
@@ -245,3 +254,5 @@ function toggleImmMode() {
     }
   }
 }
+
+reconnect();

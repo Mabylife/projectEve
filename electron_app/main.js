@@ -10,7 +10,8 @@ const path = require("path");
 const fs = require("fs");
 const { spawn, exec } = require("child_process");
 const net = require("net");
-const isPyPacked = true;
+const isPyPacked = false;
+const devMode = false; // 開發模式
 
 // ------------------ Mica ------------------
 let MicaBrowserWindow;
@@ -41,9 +42,6 @@ let restarting = false;
 let exiting = false;
 const isDev = !app.isPackaged;
 let backendIssueFlag = false;
-
-// JS 嵌入狀態
-let jsEmbeddedStarted = false;
 
 const isPackaged = app.isPackaged;
 
@@ -323,6 +321,24 @@ function createWindowsIfNeeded() {
   });
 
   writeLog("WIN", "Mica 視窗建立完成");
+  if (devMode) {
+    mediaWin.webContents.openDevTools();
+    mainWin.webContents.openDevTools();
+    mediaWin.resizable = true;
+    mainWin.resizable = true;
+  }
+
+  if (autoShowFirstToggle) {
+    writeLog("WIN_PreShow", "開始預熱視窗");
+    if (mediaWin) mediaWin.show();
+    if (mainWin) mainWin.show();
+    writeLog("WIN_PreShow", "顯示主視窗和媒體視窗");
+    setTimeout(() => {
+      if (mainWin) mainWin.hide();
+      if (mediaWin) mediaWin.hide();
+      writeLog("WIN_PreShow", "隱藏主視窗和媒體視窗");
+    }, 100);
+  }
 }
 
 function showWindows() {
@@ -471,17 +487,8 @@ app.whenReady().then(() => {
   debugPaths();
   createTray();
   registerShortcuts();
-  startEmbeddedJsServer();
   startPythonServer();
   createWindowsIfNeeded();
-  if (autoShowFirstToggle) {
-    if (mediaWin) mediaWin.show();
-    if (mainWin) mainWin.show();
-    setTimeout(() => {
-      if (mainWin) mainWin.hide();
-      if (mediaWin) mediaWin.hide();
-    }, 100);
-  }
 });
 
 // ------------------ 退出 ------------------
