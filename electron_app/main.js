@@ -45,21 +45,11 @@ let backendIssueFlag = false;
 let jsEmbeddedStarted = false;
 
 const isPackaged = app.isPackaged;
-const basePath = isPackaged ? process.resourcesPath : __dirname;
 
-// 統一路徑工具
 function resourcePath(...segments) {
   if (isPackaged) {
-    // 1. 先找 unpack 路徑（如 exe、ahk、lnk、png、html 等會被解壓的檔案）
-    const unpackPath = path.join(process.resourcesPath, "app.asar.unpacked", ...segments);
-    if (fs.existsSync(unpackPath)) return unpackPath;
-    // 2. 再找 asar 內部路徑（如 js、css、json、部分圖片等純文字檔案）
-    const asarPath = path.join(process.resourcesPath, ...segments);
-    if (fs.existsSync(asarPath)) return asarPath;
-    // 3. fallback: 直接回傳 unpackPath（讓錯誤明確）
-    return unpackPath;
+    return path.join(process.resourcesPath, "app", ...segments);
   } else {
-    // 開發模式直接用原始路徑
     return path.join(__dirname, ...segments);
   }
 }
@@ -132,9 +122,9 @@ async function startPythonServer() {
     return;
   }
 
-  const exe = resourcePath("servers", "server.exe");
+  const exe = resourcePath("servers", "py", "mediaServer.exe");
   if (!fs.existsSync(exe)) {
-    writeLog("PY", `缺少 server.exe: ${exe}`);
+    writeLog("PY", `缺少 mediaServer.exe: ${exe}`);
     backendIssueFlag = true;
     refreshTrayMenu();
     return;
