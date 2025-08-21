@@ -105,7 +105,7 @@ function taskkillByName(name, label, cb = () => {}) {
 // ------------------ Python 啟動 ------------------
 async function startPythonServer() {
   if (!isPyPacked) {
-    writeLog("PY", "未打包，跳過啟動");
+    writeLog("PY", "未打包，請使用python啟動.py檔案");
     return;
   }
 
@@ -236,35 +236,6 @@ async function gracefulStopPython(options = {}) {
   }
 }
 
-// ------------------ JS 嵌入式啟動 ------------------
-function startEmbeddedJsServer() {
-  if (jsEmbeddedStarted) {
-    writeLog("JS-EMBED", "已啟動，跳過");
-    return;
-  }
-  const entry = resourcePath("servers", "js", "jsserver.js");
-  if (!fs.existsSync(entry)) {
-    writeLog("JS-EMBED", `缺少 jsserver.js: ${entry}`);
-    backendIssueFlag = true;
-    refreshTrayMenu();
-    return;
-  }
-  try {
-    const mod = require(entry);
-    if (mod && typeof mod.start === "function") {
-      mod.start();
-      jsEmbeddedStarted = true;
-      writeLog("JS-EMBED", "啟動完成 (嵌入)");
-    } else {
-      writeLog("JS-EMBED-ERR", "模組未匯出 start()");
-    }
-  } catch (e) {
-    writeLog("JS-EMBED-ERR", "載入失敗: " + e.stack);
-    backendIssueFlag = true;
-    refreshTrayMenu();
-  }
-}
-
 // ------------------ 重啟服務 (僅重啟 Python) ------------------
 function restartServices() {
   if (restarting) {
@@ -274,8 +245,6 @@ function restartServices() {
   restarting = true;
   writeLog("SYS", "重啟服務 (Python)");
 
-  // 若你希望也能“重載”JS：可在這裡清除 require cache 再調 startEmbeddedJsServer()
-  // 目前 JS 嵌入後不重啟，除非程式碼有特殊需求
   pyRestartCount = 0;
   backendIssueFlag = false;
   refreshTrayMenu();
@@ -422,8 +391,7 @@ function buildTrayMenu() {
             `isPlaying: ${isPlaying}\n` +
             `isImmOn: ${isImmOn}\n` +
             `windowsVisible: ${windowsVisible}\n` +
-            `pyRestartCount: ${pyRestartCount}\n` +
-            `jsEmbeddedStarted: ${jsEmbeddedStarted}\n`,
+            `pyRestartCount: ${pyRestartCount}\n`,
         });
       },
     },

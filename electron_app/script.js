@@ -37,7 +37,7 @@ updateDateTime();
 
 // 更新磁碟容量（每 3 分鐘）
 function updateDisk() {
-  fetch("http://localhost:12345/disk")
+  fetch("http://localhost:54321/disk")
     .then((res) => res.json())
     .then((data) => {
       document.getElementById("c-d-e").textContent = `${data["C:"]}%_${data["D:"]}%_${data["E:"]}%`;
@@ -50,7 +50,7 @@ updateDisk();
 
 // 回收桶容量
 function updateRecyclebin() {
-  fetch("http://localhost:12345/recyclebin")
+  fetch("http://localhost:54321/recyclebin")
     .then((res) => res.json())
     .then((data) => {
       document.getElementById("recyclebin").textContent = data.recyclebinMB + " MB";
@@ -60,7 +60,7 @@ updateRecyclebin();
 
 // 每日金句
 function updateDailyQuote() {
-  fetch("http://localhost:12345/dailyquote")
+  fetch("http://localhost:54321/dailyquote")
     .then((res) => res.json())
     .then((data) => {
       document.getElementById("quote").textContent = data.quote;
@@ -112,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // 發送 POST 到 API
-      fetch("http://localhost:12345/terminal/run", {
+      fetch("http://localhost:54321/terminal/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input: cmd }),
