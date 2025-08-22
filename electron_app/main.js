@@ -461,10 +461,15 @@ function registerShortcuts() {
 
 // ------------------ IPC ------------------
 ipcMain.on("send-variable", (event, data) => {
+  console.log("Received data:", data);
   try {
+    if (Object.prototype.hasOwnProperty.call(data, "isImmOn")) {
+      isImmOn = data.isImmOn;
+    }
+
     const status = data.mediaStatus;
     isPlaying = status === "playing" || status === "paused";
-    isImmOn = !!data.isImmOn;
+    console.log(`main.js: imm:${isImmOn}, media:${status}`);
     updateMediaVisibility();
   } catch (e) {
     writeLog("IPC-ERR", "處理 send-variable 失敗: " + e.message);

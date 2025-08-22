@@ -2,4 +2,4 @@ electron_app/node_modules/
 electron_app/servers/js/node_modules/
 electron_app/dist/
 py_server/*
-!py_server/mediaServer.py
+!py_server/pyserver.py

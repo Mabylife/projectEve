@@ -187,13 +187,14 @@ function updateMediaStatus() {
       } else {
         mediaStatus = "stopped";
       }
+      isImmOn = media.isImmOn;
       document.getElementById("music-playing").textContent = mediaStatus;
-      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+      ipcRenderer.send("send-variable", { mediaStatus });
     })
     .catch((err) => {
       mediaStatus = "stopped";
       document.getElementById("music-playing").textContent = "Error";
-      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+      ipcRenderer.send("send-variable", { mediaStatus });
     });
 }
 
