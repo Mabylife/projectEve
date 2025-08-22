@@ -1,0 +1,16 @@
+{
+  "primaryColor": "#3b82f6",
+  "secondaryColor": "#64748b",
+  "backgroundColor": "#0f172a",
+  "textColor": "#f8fafc",
+  "accentColor": "#10b981",
+  "borderColor": "#334155",
+  "gradientStart": "#1e293b",
+  "gradientEnd": "#0f172a",
+  "opacity": "0.95",
+  "blur": "10px",
+  "borderRadius": "8px",
+  "fontFamily": "Inter, system-ui, sans-serif",
+  "fontSize": "14px",
+  "lineHeight": "1.5"
+}

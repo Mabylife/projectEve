@@ -26,6 +26,7 @@ setInterval(() => {
   const songTimes = document.querySelectorAll(".song-time");
   const progressBars = document.querySelectorAll(".progress-bar");
 
+  // TODO: Future migration to Python→WS→Main→IPC instead of direct fetch
   fetch("http://localhost:54321/media")
     .then((res) => res.json())
     .then((mediaArr) => {

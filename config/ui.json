@@ -1,0 +1,19 @@
+{
+  "scale": 1.0,
+  "windowOpacity": 0.95,
+  "enableAnimations": true,
+  "compactMode": false,
+  "autoHide": false,
+  "position": {
+    "x": 100,
+    "y": 100
+  },
+  "size": {
+    "width": 1200,
+    "height": 700
+  },
+  "alwaysOnTop": true,
+  "showInTaskbar": false,
+  "enableBlur": true,
+  "cornerRadius": 8
+}

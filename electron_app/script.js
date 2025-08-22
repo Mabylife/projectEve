@@ -1,9 +1,102 @@
 //script.js
-const { ipcRenderer } = require("electron");
+// Remove direct Node.js imports - use electronAPI from preload
 
-ipcRenderer.on("focus-input", () => {
-  document.getElementById("terminalInput").focus();
+// Global state
+let mediaStatus = "stopped";
+let isImmOn = false;
+let currentTheme = {};
+let currentUi = {};
+
+// Initialize config system
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    // Get initial config from main process
+    const initialConfig = await window.electronAPI.getInitialConfig();
+    if (initialConfig.theme) {
+      currentTheme = initialConfig.theme;
+      applyTheme(currentTheme);
+    }
+    if (initialConfig.ui) {
+      currentUi = initialConfig.ui;
+      applyUiConfig(currentUi);
+    }
+    
+    // Set up config update listeners
+    window.electronAPI.onThemeUpdate((theme) => {
+      currentTheme = theme;
+      applyTheme(theme);
+      updateConfigStatus('theme');
+    });
+    
+    window.electronAPI.onUiUpdate((ui) => {
+      currentUi = ui;
+      applyUiConfig(ui);
+      updateConfigStatus('ui');
+    });
+    
+    window.electronAPI.onConfigError((error) => {
+      console.error('Config error:', error);
+      showConfigError(error);
+    });
+    
+  } catch (error) {
+    console.error('Failed to initialize config system:', error);
+  }
 });
+
+// Apply theme by setting CSS variables
+function applyTheme(theme) {
+  const root = document.documentElement;
+  
+  // Set CSS custom properties
+  Object.entries(theme).forEach(([key, value]) => {
+    const cssProperty = `--${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`;
+    root.style.setProperty(cssProperty, value);
+  });
+  
+  console.log('Applied theme with', Object.keys(theme).length, 'variables');
+}
+
+// Apply UI configuration
+function applyUiConfig(ui) {
+  const root = document.documentElement;
+  const body = document.body;
+  
+  // Apply root font size for scaling
+  if (ui.scale) {
+    root.style.fontSize = `${14 * ui.scale}px`;
+  }
+  
+  // Apply window opacity
+  if (ui.windowOpacity !== undefined) {
+    body.style.opacity = ui.windowOpacity;
+  }
+  
+  console.log('Applied UI config: scale =', ui.scale, 'opacity =', ui.windowOpacity);
+}
+
+// Show config status (could add a status area in the UI)
+function updateConfigStatus(type) {
+  // TODO: Add small status indicator if there's an existing status area
+  console.log(`Config ${type} updated successfully`);
+}
+
+// Show config error (could add error display)
+function showConfigError(error) {
+  // TODO: Add error display in UI if needed
+  console.error('Config error:', error);
+}
+
+// Focus input handler
+if (window.electronAPI) {
+  // Use electronAPI for focus events when available
+  window.electronAPI.onFocusInput(() => {
+    document.getElementById("terminalInput").focus();
+  });
+} else {
+  // Fallback for development mode
+  console.warn('electronAPI not available, running in legacy mode');
+}
 
 setInterval(() => {
   updateDateTime();
@@ -139,6 +232,7 @@ function updateDateTime() {
 
 // 更新磁碟容量（每 3 分鐘）
 function updateDisk() {
+  // TODO: Future migration to Python→WS→Main→IPC instead of direct fetch
   fetch("http://localhost:54321/disk")
     .then((res) => res.json())
     .then((data) => {
@@ -151,6 +245,7 @@ function updateDisk() {
 
 // 回收桶容量
 function updateRecyclebin() {
+  // TODO: Future migration to Python→WS→Main→IPC instead of direct fetch
   fetch("http://localhost:54321/recyclebin")
     .then((res) => res.json())
     .then((data) => {
@@ -160,6 +255,7 @@ function updateRecyclebin() {
 
 // 每日金句
 function updateDailyQuote() {
+  // TODO: Future migration to Python→WS→Main→IPC instead of direct fetch
   fetch("http://localhost:54321/dailyquote")
     .then((res) => res.json())
     .then((data) => {
@@ -173,6 +269,7 @@ let mediaStatus = "stopped";
 let isImmOn = false;
 function updateMediaStatus() {
   mediaStatus = "stopped"; // 預設為 stopped
+  // TODO: Future migration to Python→WS→Main→IPC instead of direct fetch
   fetch("http://localhost:54321/media")
     .then((res) => res.json())
     .then((mediaArr) => {
@@ -188,12 +285,16 @@ function updateMediaStatus() {
         mediaStatus = "stopped";
       }
       document.getElementById("music-playing").textContent = mediaStatus;
-      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+      if (window.electronAPI) {
+        window.electronAPI.sendVariable({ mediaStatus, isImmOn });
+      }
     })
     .catch((err) => {
       mediaStatus = "stopped";
       document.getElementById("music-playing").textContent = "Error";
-      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+      if (window.electronAPI) {
+        window.electronAPI.sendVariable({ mediaStatus, isImmOn });
+      }
     });
 }
 
@@ -245,12 +346,16 @@ function toggleImmMode() {
     }
     alphaSection.innerHTML = immAlphaSectionInnerHTML;
     isImmOn = true;
-    ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+    if (window.electronAPI) {
+      window.electronAPI.sendVariable({ mediaStatus, isImmOn });
+    }
   } else {
     if (savedAlphaSectionInnerHTML) {
       alphaSection.innerHTML = savedAlphaSectionInnerHTML;
       isImmOn = false;
-      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+      if (window.electronAPI) {
+        window.electronAPI.sendVariable({ mediaStatus, isImmOn });
+      }
     }
   }
 }

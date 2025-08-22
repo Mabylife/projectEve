@@ -10,6 +10,7 @@ const path = require("path");
 const fs = require("fs");
 const { spawn, exec } = require("child_process");
 const net = require("net");
+const chokidar = require("chokidar");
 const isPyPacked = false;
 const devMode = false; // 開發模式
 
@@ -45,11 +46,31 @@ let backendIssueFlag = false;
 
 const isPackaged = app.isPackaged;
 
+// ------------------ Config State ------------------
+let currentTheme = {};
+let currentUi = {};
+let configWatchers = [];
+
+// Debounce config updates
+let themeUpdateTimeout = null;
+let uiUpdateTimeout = null;
+const CONFIG_DEBOUNCE_MS = 300;
+
 function resourcePath(...segments) {
   if (isPackaged) {
     return path.join(process.resourcesPath, "app", ...segments);
   } else {
     return path.join(__dirname, ...segments);
+  }
+}
+
+function configPath(...segments) {
+  if (isPackaged) {
+    // In packaged mode, read from userData/config
+    return path.join(app.getPath("userData"), "config", ...segments);
+  } else {
+    // In dev mode, read from project root config/
+    return path.join(__dirname, "..", "config", ...segments);
   }
 }
 
@@ -69,7 +90,215 @@ function debugPaths() {
   writeLog("PATH", `__dirname=${__dirname}`);
   writeLog("PATH", `userData=${app.getPath("userData")}`);
   writeLog("PATH", `logsDir=${logsDir}`);
+  writeLog("PATH", `configPath=${configPath()}`);
   writeLog("MICA", micaLoadError ? "載入失敗: " + micaLoadError.message : "載入成功");
+}
+
+// ------------------ Config Management ------------------
+function ensureConfigDir() {
+  const configDir = configPath();
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true });
+    writeLog("CONFIG", `建立設定目錄: ${configDir}`);
+  }
+}
+
+function createDefaultConfigs() {
+  ensureConfigDir();
+  
+  const themeFile = configPath("theme.json");
+  const uiFile = configPath("ui.json");
+  
+  // Default theme config
+  const defaultTheme = {
+    primaryColor: "#3b82f6",
+    secondaryColor: "#64748b",
+    backgroundColor: "#0f172a",
+    textColor: "#f8fafc",
+    accentColor: "#10b981",
+    borderColor: "#334155",
+    gradientStart: "#1e293b",
+    gradientEnd: "#0f172a",
+    opacity: "0.95",
+    blur: "10px",
+    borderRadius: "8px",
+    fontFamily: "Inter, system-ui, sans-serif",
+    fontSize: "14px",
+    lineHeight: "1.5"
+  };
+  
+  // Default UI config
+  const defaultUi = {
+    scale: 1.0,
+    windowOpacity: 0.95,
+    enableAnimations: true,
+    compactMode: false,
+    autoHide: false,
+    position: { x: 100, y: 100 },
+    size: { width: 1200, height: 700 },
+    alwaysOnTop: true,
+    showInTaskbar: false,
+    enableBlur: true,
+    cornerRadius: 8
+  };
+  
+  if (!fs.existsSync(themeFile)) {
+    fs.writeFileSync(themeFile, JSON.stringify(defaultTheme, null, 2));
+    writeLog("CONFIG", `建立預設 theme.json: ${themeFile}`);
+  }
+  
+  if (!fs.existsSync(uiFile)) {
+    fs.writeFileSync(uiFile, JSON.stringify(defaultUi, null, 2));
+    writeLog("CONFIG", `建立預設 ui.json: ${uiFile}`);
+  }
+}
+
+function validateThemeConfig(theme) {
+  const requiredFields = ['primaryColor', 'backgroundColor', 'textColor'];
+  for (const field of requiredFields) {
+    if (!theme[field]) {
+      return { valid: false, error: `缺少必要欄位: ${field}` };
+    }
+  }
+  return { valid: true };
+}
+
+function validateUiConfig(ui) {
+  if (typeof ui.scale !== 'number' || ui.scale <= 0) {
+    return { valid: false, error: 'scale 必須是正數' };
+  }
+  if (typeof ui.windowOpacity !== 'number' || ui.windowOpacity < 0 || ui.windowOpacity > 1) {
+    return { valid: false, error: 'windowOpacity 必須在 0-1 之間' };
+  }
+  return { valid: true };
+}
+
+function loadConfig(configFile, validateFn) {
+  try {
+    const content = fs.readFileSync(configFile, 'utf8');
+    const config = JSON.parse(content);
+    const validation = validateFn(config);
+    
+    if (!validation.valid) {
+      writeLog("CONFIG-ERR", `設定檔驗證失敗 ${configFile}: ${validation.error}`);
+      return null;
+    }
+    
+    writeLog("CONFIG", `載入設定檔: ${path.basename(configFile)}`);
+    return config;
+  } catch (error) {
+    writeLog("CONFIG-ERR", `載入設定檔失敗 ${configFile}: ${error.message}`);
+    return null;
+  }
+}
+
+function loadThemeConfig() {
+  const themeFile = configPath("theme.json");
+  return loadConfig(themeFile, validateThemeConfig);
+}
+
+function loadUiConfig() {
+  const uiFile = configPath("ui.json");
+  return loadConfig(uiFile, validateUiConfig);
+}
+
+function broadcastThemeUpdate(theme) {
+  if (mainWin) {
+    mainWin.webContents.send('theme:update', theme);
+  }
+  if (mediaWin) {
+    mediaWin.webContents.send('theme:update', theme);
+  }
+  writeLog("CONFIG", `廣播主題更新: ${Object.keys(theme).length} 個變數`);
+}
+
+function broadcastUiUpdate(ui) {
+  if (mainWin) {
+    mainWin.webContents.send('ui:update', ui);
+  }
+  if (mediaWin) {
+    mediaWin.webContents.send('ui:update', ui);
+  }
+  writeLog("CONFIG", `廣播 UI 更新: scale=${ui.scale}, opacity=${ui.windowOpacity}`);
+}
+
+function broadcastConfigError(error) {
+  if (mainWin) {
+    mainWin.webContents.send('config:error', error);
+  }
+  if (mediaWin) {
+    mediaWin.webContents.send('config:error', error);
+  }
+  writeLog("CONFIG-ERR", `廣播設定錯誤: ${error}`);
+}
+
+function debouncedThemeUpdate() {
+  if (themeUpdateTimeout) {
+    clearTimeout(themeUpdateTimeout);
+  }
+  
+  themeUpdateTimeout = setTimeout(() => {
+    const theme = loadThemeConfig();
+    if (theme) {
+      currentTheme = theme;
+      broadcastThemeUpdate(theme);
+    } else {
+      broadcastConfigError("主題設定檔載入失敗");
+    }
+  }, CONFIG_DEBOUNCE_MS);
+}
+
+function debouncedUiUpdate() {
+  if (uiUpdateTimeout) {
+    clearTimeout(uiUpdateTimeout);
+  }
+  
+  uiUpdateTimeout = setTimeout(() => {
+    const ui = loadUiConfig();
+    if (ui) {
+      currentUi = ui;
+      broadcastUiUpdate(ui);
+    } else {
+      broadcastConfigError("UI 設定檔載入失敗");
+    }
+  }, CONFIG_DEBOUNCE_MS);
+}
+
+function initConfigSystem() {
+  createDefaultConfigs();
+  
+  // Load initial configs
+  const theme = loadThemeConfig();
+  const ui = loadUiConfig();
+  
+  if (theme) currentTheme = theme;
+  if (ui) currentUi = ui;
+  
+  // Watch for file changes
+  const themeFile = configPath("theme.json");
+  const uiFile = configPath("ui.json");
+  
+  if (fs.existsSync(themeFile)) {
+    const themeWatcher = chokidar.watch(themeFile, { ignoreInitial: true });
+    themeWatcher.on('change', debouncedThemeUpdate);
+    configWatchers.push(themeWatcher);
+    writeLog("CONFIG", `監控主題設定檔: ${themeFile}`);
+  }
+  
+  if (fs.existsSync(uiFile)) {
+    const uiWatcher = chokidar.watch(uiFile, { ignoreInitial: true });
+    uiWatcher.on('change', debouncedUiUpdate);
+    configWatchers.push(uiWatcher);
+    writeLog("CONFIG", `監控 UI 設定檔: ${uiFile}`);
+  }
+}
+
+function cleanupConfigSystem() {
+  configWatchers.forEach(watcher => {
+    watcher.close();
+  });
+  configWatchers = [];
+  writeLog("CONFIG", "設定檔監控清理完成");
 }
 
 // ------------------ Port / Process 工具 ------------------
@@ -274,7 +503,11 @@ function createWindowsIfNeeded() {
     focusable: true,
     alwaysOnTop: true,
     show: false,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: { 
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    },
   });
   try {
     mainWin.setRoundedCorner();
@@ -288,6 +521,16 @@ function createWindowsIfNeeded() {
   const indexHtml = resourcePath("index.html");
   if (fs.existsSync(indexHtml)) mainWin.loadFile(indexHtml);
   else writeLog("WIN", "缺少 index.html: " + indexHtml);
+  
+  // Send initial config when main window is ready
+  mainWin.webContents.once('did-finish-load', () => {
+    if (currentTheme && Object.keys(currentTheme).length > 0) {
+      mainWin.webContents.send('theme:update', currentTheme);
+    }
+    if (currentUi && Object.keys(currentUi).length > 0) {
+      mainWin.webContents.send('ui:update', currentUi);
+    }
+  });
 
   mediaWin = new MicaBrowserWindow({
     width: 300,
@@ -299,7 +542,11 @@ function createWindowsIfNeeded() {
     focusable: false,
     alwaysOnTop: true,
     show: false,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: { 
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    },
   });
   try {
     mediaWin.setRoundedCorner();
@@ -312,6 +559,16 @@ function createWindowsIfNeeded() {
   const mediaHtml = resourcePath("mediaCard.html");
   if (fs.existsSync(mediaHtml)) mediaWin.loadFile(mediaHtml);
   else writeLog("WIN", "缺少 mediaCard.html: " + mediaHtml);
+  
+  // Send initial config when media window is ready
+  mediaWin.webContents.once('did-finish-load', () => {
+    if (currentTheme && Object.keys(currentTheme).length > 0) {
+      mediaWin.webContents.send('theme:update', currentTheme);
+    }
+    if (currentUi && Object.keys(currentUi).length > 0) {
+      mediaWin.webContents.send('ui:update', currentUi);
+    }
+  });
 
   mainWin.on("close", (e) => {
     if (!app.isQuiting) {
@@ -471,6 +728,14 @@ ipcMain.on("send-variable", (event, data) => {
   }
 });
 
+// Handle initial config request from renderer
+ipcMain.handle("get-initial-config", async () => {
+  return {
+    theme: currentTheme,
+    ui: currentUi
+  };
+});
+
 // ------------------ 單實例 ------------------
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -485,6 +750,7 @@ app.on("window-all-closed", (e) => e.preventDefault());
 
 app.whenReady().then(() => {
   debugPaths();
+  initConfigSystem();
   createTray();
   registerShortcuts();
   startPythonServer();
@@ -498,6 +764,7 @@ async function cleanExit() {
   writeLog("SYS", "應用程式退出");
   pyRestartCount = MAX_RESTART;
   globalShortcut.unregisterAll();
+  cleanupConfigSystem();
   await gracefulStopPython({ timeoutMs: 4000, fallbackKill: true });
 }
 
