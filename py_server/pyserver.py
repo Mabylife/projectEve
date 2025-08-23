@@ -577,7 +577,7 @@ async def terminal_run():
             else:
                 query = cmd
                 encoded = urllib.parse.quote_plus(query)
-                ok = open_url(f"https://duckduckgo.com/?q={encoded}")
+                ok = open_url(f"https://duckduckgo.com/?q=!{encoded}")
                 output = [f"Searching (Auto direct): {query}"]
                 success = success and ok
         else:
