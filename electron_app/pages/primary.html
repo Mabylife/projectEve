@@ -11,8 +11,8 @@
       <div class="upperPart immOff">
         <section class="daily_quote alphaSection">
           <small>/ daily_quote</small>
-          <p class="quote" id="quote"></p>
-          <p class="author normal" id="quote-author"></p>
+          <p class="quote" id="quote" data-eve-quote-text></p>
+          <p class="author normal" id="quote-author" data-eve-quote-author></p>
         </section>
         <section class="status">
           <small>/ status</small>
@@ -23,13 +23,17 @@
             <br />
             <span></span>
             <br />
-            <span class="small">C:/D:/E:/ </span> <span class="normal" id="c-d-e">__%__%__%</span>
+            <span class="small">C: </span> <span class="normal" id="c-d-e-c" data-eve-disk-c>__%</span>
+            <br />
+            <span class="small">D: </span> <span class="normal" id="c-d-e-d" data-eve-disk-d>__%</span>
+            <br />
+            <span class="small">E: </span> <span class="normal" id="c-d-e-e" data-eve-disk-e>__%</span>
             <br />
             <span></span>
             <br />
             <span class="small">Power_mode </span> <span class="normal" id="power-mode">silent</span>
             <br />
-            <span class="small">Recycle_bin </span> <span class="normal" id="recyclebin">loading_</span>
+            <span class="small">Recycle_bin </span> <span class="normal" id="recyclebin" data-eve-recycle-mb>loading_</span>
             <br />
             <span class="small">musicPlaying </span> <span class="normal" id="music-playing">NaN</span>
           </div>
@@ -44,7 +48,7 @@
           </div>
           <div class="inputContainer">
             <span class="normal">> </span>
-            <input class="normal" id="terminalInput" spellcheck="false" type="text" value="" />
+            <input class="normal" id="terminalInput" data-eve-console-input spellcheck="false" type="text" value="" />
           </div>
         </div>
       </section>

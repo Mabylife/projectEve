@@ -169,7 +169,7 @@
 
   function updateRecycleUI() {
     const mb = state.recyclebin?.recyclebinMB ?? 0;
-    setText(document.querySelector("[data-eve-recycle-mb]"), String(mb));
+    setText(document.querySelector("[data-eve-recycle-mb]"), `${mb} MB`);
   }
 
   function updateQuoteUI() {
