@@ -25,6 +25,9 @@ try {
 }
 
 // ------------------ 狀態 ------------------
+let latestUiConfig = { ui: { mediaWindow: { visibilityMode: "auto" }, immersive_mode: "off" } };
+let desiredImmOn = false;
+let immAppliedOnce = false;
 let tray = null;
 let pyProc = null;
 let mainWin = null;
@@ -53,6 +56,11 @@ function resourcePath(...segments) {
   } else {
     return path.join(__dirname, ...segments);
   }
+}
+
+function parseImmersiveFromUi(uiObj) {
+  const v = (uiObj?.ui?.immersive_mode || "").toString().toLowerCase();
+  return v === "on";
 }
 
 // ------------------ 日誌 ------------------
@@ -362,12 +370,40 @@ function showWindows() {
     height: mB.height,
   });
 
-  if (isPlaying && !isImmOn) mediaWin.showInactive();
-  else mediaWin.hide();
-
   windowsVisible = true;
+  updateMediaVisibility(); // ← 加上這行
   mainWin.webContents.send("focus-input");
 }
+
+// app.whenReady()
+app.whenReady().then(() => {
+  debugPaths();
+  createTray();
+  registerShortcuts();
+  startPythonServer();
+  createWindowsIfNeeded();
+
+  // 啟用設定檔熱更新：把 ui 變更回呼接進來
+  setupConfigHotReload(() => [mainWin, mediaWin], {
+    onUiChange: (ui) => {
+      latestUiConfig = ui || latestUiConfig;
+      updateMediaVisibility();
+    },
+  });
+
+  // 縮放管理（如果你已加）
+  const scaleMgr = initScaleManager(() => [mainWin, mediaWin], {
+    afterApply: () => {
+      if (!mainWin || !mediaWin) return;
+      if (!windowsVisible) return;
+      hideWindows();
+      setTimeout(() => showWindows(), 120);
+    },
+  });
+  scaleMgr.captureBaseBounds();
+  if (mainWin) mainWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
+  if (mediaWin) mediaWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
+});
 
 function hideWindows() {
   if (mainWin) mainWin.hide();
@@ -381,12 +417,33 @@ function toggleWindows() {
   windowsVisible ? hideWindows() : showWindows();
 }
 
+function getMediaVisibilityMode() {
+  const mw = latestUiConfig?.ui?.mediaWindow || {};
+  if (typeof mw.visible === "boolean") return mw.visible ? "always" : "never";
+  const mode = mw.visibilityMode;
+  return mode === "always" || mode === "never" ? mode : "auto";
+}
+
 function updateMediaVisibility() {
   if (!mediaWin) return;
+
+  // 若主介面目前沒顯示，media 一律隱藏
   if (!windowsVisible) {
     mediaWin.hide();
     return;
   }
+
+  const mode = getMediaVisibilityMode();
+  if (mode === "never") {
+    mediaWin.hide();
+    return;
+  }
+  if (mode === "always") {
+    if (!mediaWin.isVisible()) mediaWin.showInactive();
+    return;
+  }
+
+  // auto：沿用既有條件（正在播放 且 非沉浸模式）
   if (isPlaying && !isImmOn) {
     if (!mediaWin.isVisible()) mediaWin.showInactive();
   } else {
@@ -498,20 +555,38 @@ app.whenReady().then(() => {
   startPythonServer();
   createWindowsIfNeeded();
 
-  // 啟用設定檔熱更新
-  setupConfigHotReload(() => [mainWin, mediaWin]);
+  // 啟用設定檔熱更新（此處也可拿到「首次載入」的 ui）
+  setupConfigHotReload(() => [mainWin, mediaWin], {
+    onUiChange: (ui) => {
+      // 任何時候都更新 latest（給其他欄位熱更新用）
+      latestUiConfig = ui || latestUiConfig;
 
-  // 初始化縮放管理，指定 afterApply：scale 套用後自動「隱藏→顯示」一次
-  const scaleMgr = initScaleManager(() => [mainWin, mediaWin], {
-    afterApply: () => {
-      // 僅在視窗目前已顯示時做隱藏→顯示，避免打開時亂跳
-      if (!mainWin || !mediaWin) return;
-      if (!windowsVisible) return;
-      hideWindows();
-      // 略等 100~150ms 讓縮放與佈局完成，再顯示
-      setTimeout(() => showWindows(), 120);
+      // 解析預設沉浸狀態（只用於「啟動初次套用」）
+      desiredImmOn = parseImmersiveFromUi(latestUiConfig);
+
+      // 僅在「尚未套用過」時送一次 imm:set；之後不再隨 ui.json 熱更新
+      if (!immAppliedOnce) {
+        if (mainWin && !mainWin.isDestroyed()) {
+          mainWin.webContents.send("imm:set", desiredImmOn);
+        }
+        isImmOn = !!desiredImmOn; // 讓主行程的 auto 規則馬上生效
+        updateMediaVisibility();
+        immAppliedOnce = true;
+      }
     },
   });
+
+  // 視窗載入完成後，若還沒成功送過，補送一次
+  if (mainWin) {
+    mainWin.webContents.once("did-finish-load", () => {
+      if (!immAppliedOnce) {
+        mainWin.webContents.send("imm:set", desiredImmOn);
+        isImmOn = !!desiredImmOn;
+        updateMediaVisibility();
+        immAppliedOnce = true;
+      }
+    });
+  }
 
   // 記錄初始尺寸作為縮放基準（避免倍數累加）
   scaleMgr.captureBaseBounds();

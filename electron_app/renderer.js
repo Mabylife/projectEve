@@ -268,6 +268,27 @@ const immAlphaSectionInnerHTML =
   "  </div>" +
   "</div>";
 
+function isImmActive() {
+  const upperPart = document.querySelector(".upperPart");
+  return !!(upperPart && upperPart.classList.contains("immOn"));
+}
+
+function setImmMode(on) {
+  const current = isImmActive();
+  if (on === current) return;
+  if (typeof toggleImmMode === "function") {
+    toggleImmMode();
+  } else {
+    document.addEventListener("DOMContentLoaded", () => typeof toggleImmMode === "function" && toggleImmMode(), { once: true });
+  }
+}
+
+// 暴露給其他腳本（如 themeRuntime）使用
+window.eveUi = Object.assign({}, window.eveUi, { setImmMode });
+
+// 啟動時由主行程下發 imm:set，一次性套用預設沉浸模式
+window.eve?.onImmSet?.((wantOn) => setImmMode(!!wantOn));
+
 function toggleImmMode() {
   const upperPart = document.querySelector(".upperPart");
   if (!upperPart || !alphaSection) return;

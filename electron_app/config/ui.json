@@ -3,6 +3,10 @@
     "scale": 1,
     "alwaysOnTop": true,
     "nodeIntegration": true,
-    "contextIsolation": false
+    "contextIsolation": false,
+    "mediaWindow": {
+      "visibilityMode": "auto"
+    },
+    "immersive_mode": "off"
   }
 }
