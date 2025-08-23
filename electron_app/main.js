@@ -484,10 +484,26 @@ function buildTrayMenu() {
     },
   ]);
 }
+
 function refreshTrayMenu() {
   if (tray) tray.setContextMenu(buildTrayMenu());
 }
+
 function createTray() {
+  // 1) 避免重複建立
+  if (tray && typeof tray.isDestroyed === "function" && !tray.isDestroyed()) {
+    writeLog("TRAY", "Tray already exists. Skip creating a new one.");
+    refreshTrayMenu();
+    return;
+  }
+  // 2) 如果有殘留就先清掉
+  if (tray && typeof tray.destroy === "function") {
+    try {
+      tray.destroy();
+    } catch {}
+    tray = null;
+  }
+
   let iconPath = resourcePath("icons", "tray_icon.png");
   if (!fs.existsSync(iconPath)) {
     const icoFallback = resourcePath("icons", "app.ico");
@@ -598,10 +614,30 @@ app.whenReady().then(() => {
 async function cleanExit() {
   if (exiting) return;
   exiting = true;
-  writeLog("SYS", "應用程式退出");
-  pyRestartCount = MAX_RESTART;
-  globalShortcut.unregisterAll();
-  await gracefulStopPython({ timeoutMs: 4000, fallbackKill: true });
+  writeLog("SYS", "開始清理...");
+
+  // 先銷毀 tray，避免殘留
+  if (tray && typeof tray.destroy === "function") {
+    try {
+      tray.destroy();
+    } catch {}
+    tray = null;
+  }
+
+  await gracefulStopPython({ timeoutMs: 2000, fallbackKill: true });
+
+  try {
+    globalShortcut.unregisterAll();
+  } catch {}
+
+  try {
+    if (mainWin) mainWin.destroy();
+  } catch {}
+  try {
+    if (mediaWin) mediaWin.destroy();
+  } catch {}
+
+  writeLog("SYS", "清理完成");
 }
 
 app.on("before-quit", (e) => {
