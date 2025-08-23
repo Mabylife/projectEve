@@ -235,8 +235,47 @@
       try {
         const res = await api.runTerminal(inputText);
         console.debug("[EVE][terminal] result:", res);
+        
+        // Add terminal output to UI
+        if (res && res.ok && res.data) {
+          const outputContainer = document.querySelector("#terminalOutput") || document.querySelector("[data-eve-console-output]");
+          if (outputContainer && res.data.output) {
+            res.data.output.forEach((line) => {
+              const p = document.createElement("p");
+              p.className = "small";
+              p.textContent = line;
+              if (res.data.success === false) {
+                p.style.color = "red";
+              }
+              outputContainer.appendChild(p);
+            });
+            
+            // Scroll to bottom
+            outputContainer.scrollTop = outputContainer.scrollHeight;
+            
+            // Handle special actions from terminal commands
+            if (res.data.isToggleImmMode) {
+              setImmersive(!state.isImmOn);
+            }
+            if (res.data.isReconnect) {
+              api.refreshAll();
+            }
+          }
+        }
       } catch (e) {
         console.error("[EVE][terminal] error:", e);
+        
+        // Show error in terminal output
+        const outputContainer = document.querySelector("#terminalOutput") || document.querySelector("[data-eve-console-output]");
+        if (outputContainer) {
+          const p = document.createElement("p");
+          p.className = "small";
+          p.style.color = "red";
+          p.style.opacity = "0.5";
+          p.textContent = "Terminal error: " + (e.message || e);
+          outputContainer.appendChild(p);
+          outputContainer.scrollTop = outputContainer.scrollHeight;
+        }
       }
     }
 
@@ -244,16 +283,22 @@
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           const text = input.value.trim();
-          if (text) runTerminal(text);
+          if (text) {
+            runTerminal(text);
+          }
           input.value = "";
+          input.focus();
         }
       });
     }
     if (runBtn && input) {
       runBtn.addEventListener("click", () => {
         const text = input.value.trim();
-        if (text) runTerminal(text);
+        if (text) {
+          runTerminal(text);
+        }
         input.value = "";
+        input.focus();
       });
     }
 
