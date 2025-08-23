@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>mediaCard</title>
-    <link rel="stylesheet" href="main.css" />
+    <link rel="stylesheet" href="../main.css" />
   </head>
-  <body>
+  <body data-page="mediaCard">
     <div class="mediaCard LG" id="mediaCard">
       <small class="fetch-status">/ media</small>
-      <img class="song-thumbnail" src="assets/defaultThumbnail.svg" alt=" " />
+      <img class="song-thumbnail" src="../assets/defaultThumbnail.svg" alt=" " />
       <div>
         <div><span class="small w86">Song</span> <span class="normal marquee song-title">--</span> <br /></div>
         <div><span class="small w86">Author</span> <span class="normal marquee song-author">--</span><br /></div>
@@ -27,6 +27,7 @@
       }
     </style>
 
-    <script src="mediaFetch.js"></script>
+    <script src="../themeRuntime.js"></script>
+    <script src="../renderer/renderer.js"></script>
   </body>
 </html>

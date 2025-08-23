@@ -5,6 +5,7 @@
 //
 // 若需重新啟動 JS server，可在 restartServices 中加入自定 reload 邏輯 (目前僅重啟 Python)
 
+const { setupConfigHotReload } = require("./configWatcher");
 const { app, Tray, Menu, dialog, shell, globalShortcut, nativeImage, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
@@ -27,6 +28,7 @@ let tray = null;
 let pyProc = null;
 let mainWin = null;
 let mediaWin = null;
+let refreshWindowsPreference = true; // 是否允許創建視窗
 
 let isPlaying = false;
 let isImmOn = false;
@@ -40,7 +42,6 @@ let pyRestartCount = 0;
 let lastPyStart = 0;
 let restarting = false;
 let exiting = false;
-const isDev = !app.isPackaged;
 let backendIssueFlag = false;
 
 const isPackaged = app.isPackaged;
@@ -257,7 +258,7 @@ function restartServices() {
 
 // ------------------ 視窗 ------------------
 function createWindowsIfNeeded() {
-  if (mainWin || mediaWin) return;
+  if (mainWin || mediaWin || !refreshWindowsPreference) return;
   if (micaLoadError || !MicaBrowserWindow) {
     dialog.showErrorBox("Mica 模組缺失", "無法載入 mica-electron，視窗功能停用。");
     writeLog("MICA", "停用視窗：" + (micaLoadError && micaLoadError.message));
@@ -274,7 +275,9 @@ function createWindowsIfNeeded() {
     focusable: true,
     alwaysOnTop: true,
     show: false,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+    },
   });
   try {
     mainWin.setRoundedCorner();
@@ -285,9 +288,9 @@ function createWindowsIfNeeded() {
     writeLog("MICA", "主視窗效果設定失敗: " + e.message);
   }
 
-  const indexHtml = resourcePath("index.html");
-  if (fs.existsSync(indexHtml)) mainWin.loadFile(indexHtml);
-  else writeLog("WIN", "缺少 index.html: " + indexHtml);
+  const primaryHtml = resourcePath("./pages/primary.html");
+  if (fs.existsSync(primaryHtml)) mainWin.loadFile(primaryHtml);
+  else writeLog("WIN", "缺少 primary.html: " + primaryHtml);
 
   mediaWin = new MicaBrowserWindow({
     width: 300,
@@ -299,7 +302,9 @@ function createWindowsIfNeeded() {
     focusable: false,
     alwaysOnTop: true,
     show: false,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+    },
   });
   try {
     mediaWin.setRoundedCorner();
@@ -309,7 +314,7 @@ function createWindowsIfNeeded() {
     writeLog("MICA", "媒體視窗效果設定失敗: " + e.message);
   }
 
-  const mediaHtml = resourcePath("mediaCard.html");
+  const mediaHtml = resourcePath("./pages/mediaCard.html");
   if (fs.existsSync(mediaHtml)) mediaWin.loadFile(mediaHtml);
   else writeLog("WIN", "缺少 mediaCard.html: " + mediaHtml);
 
@@ -461,15 +466,12 @@ function registerShortcuts() {
 
 // ------------------ IPC ------------------
 ipcMain.on("send-variable", (event, data) => {
-  console.log("Received data:", data);
   try {
     if (Object.prototype.hasOwnProperty.call(data, "isImmOn")) {
       isImmOn = data.isImmOn;
     }
-
     const status = data.mediaStatus;
     isPlaying = status === "playing" || status === "paused";
-    console.log(`main.js: imm:${isImmOn}, media:${status}`);
     updateMediaVisibility();
   } catch (e) {
     writeLog("IPC-ERR", "處理 send-variable 失敗: " + e.message);
@@ -494,6 +496,8 @@ app.whenReady().then(() => {
   registerShortcuts();
   startPythonServer();
   createWindowsIfNeeded();
+  // 啟用設定檔熱更新（會自動做首次廣播與監看）
+  setupConfigHotReload(() => [mainWin, mediaWin]);
 });
 
 // ------------------ 退出 ------------------
