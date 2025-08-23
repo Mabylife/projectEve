@@ -1,10 +1,4 @@
-//renderer.js
-const { ipcRenderer } = require("electron");
-
-ipcRenderer.on("focus-input", () => {
-  const input = document.getElementById("terminalInput");
-  if (input) input.focus();
-});
+//renderer.js（移除 require，改用 preload 暴露的 window.eve）
 
 function reconnect() {
   updateDateTime();
@@ -16,6 +10,12 @@ function reconnect() {
 
 document.addEventListener("DOMContentLoaded", () => {
   reconnect();
+
+  // 焦點事件（由主進程觸發）
+  window.eve?.onFocusInput(() => {
+    const input = document.getElementById("terminalInput");
+    if (input) input.focus();
+  });
 
   setInterval(() => {
     updateDateTime();
@@ -31,7 +31,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const inputEl = document.getElementById("terminalInput");
   const outputEl = document.getElementById("terminalOutput");
 
-  // 監聽 Enter 鍵
   if (inputEl && outputEl) {
     inputEl.addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
@@ -144,7 +143,7 @@ function updateDisk() {
       const diskEl = document.getElementById("c-d-e");
       if (diskEl) diskEl.textContent = `${data["C:"]}%_${data["D:"]}%_${data["E:"]}%`;
     })
-    .catch((err) => {
+    .catch(() => {
       const diskEl = document.getElementById("c-d-e");
       if (diskEl) diskEl.textContent = "Error";
     });
@@ -183,16 +182,14 @@ const renderProgressBar = (position, duration, totalBars = 20) => {
   const progress = Math.floor((position / duration) * totalBars);
   let bar = "[";
   for (let i = 0; i < totalBars; i++) {
-    if (i === progress) {
-      bar += "O";
-    } else {
-      bar += "-";
-    }
+    bar += i === progress ? "O" : "-";
   }
   bar += "]";
   return bar;
 };
 let mediaStatus;
+let isImmOn = false;
+
 function updateMediaStatus() {
   const songThumbnails = document.querySelectorAll(".song-thumbnail");
   const songTitles = document.querySelectorAll(".song-title");
@@ -203,46 +200,32 @@ function updateMediaStatus() {
   fetch("http://localhost:54321/media")
     .then((res) => res.json())
     .then((mediaArr) => {
-      // mediaArr is an array, so get the first item
       const media = mediaArr[0] || {};
-      console.log(media);
       title = media.title || "--";
       author = media.artist || "--";
-      // 更新你的 DOM
-      songTitles.forEach((titleElem) => {
-        if (titleElem) titleElem.textContent = title;
+      songTitles.forEach((el) => el && (el.textContent = title));
+      songAuthors.forEach((el) => el && (el.textContent = author));
+      songThumbnails.forEach((el) => {
+        if (el) el.src = media.thumbnail || "../assets/defaultThumbnail.svg";
       });
-      songAuthors.forEach((authorElem) => {
-        if (authorElem) authorElem.textContent = author;
-      });
-      songThumbnails.forEach((thumbnailElem) => {
-        if (thumbnailElem) thumbnailElem.src = media.thumbnail || "assets/defaultThumbnail.svg";
-      }); // 預設縮圖
-      songTimes.forEach((timeElem) => {
-        if (timeElem) timeElem.textContent = `${formatSec(media.position)} / ${formatSec(media.duration)}`;
-      });
-      progressBars.forEach((progressBar) => {
-        if (progressBar) progressBar.textContent = renderProgressBar(media.position, media.duration);
-      });
-      if (!media || !media.state) {
-        mediaStatus = "stopped";
-      } else if (media.state === "4" || media.state === "Playing") {
-        mediaStatus = "playing";
-      } else if (media.state === "5" || media.state === "Paused") {
-        mediaStatus = "paused";
-      } else {
-        mediaStatus = "stopped";
-      }
-      isImmOn = media.isImmOn;
+      songTimes.forEach((el) => el && (el.textContent = `${formatSec(media.position)} / ${formatSec(media.duration)}`));
+      progressBars.forEach((el) => el && (el.textContent = renderProgressBar(media.position, media.duration)));
+
+      if (!media || !media.state) mediaStatus = "stopped";
+      else if (media.state === "4" || media.state === "Playing") mediaStatus = "playing";
+      else if (media.state === "5" || media.state === "Paused") mediaStatus = "paused";
+      else mediaStatus = "stopped";
+
+      isImmOn = !!media.isImmOn;
       const musicPlayingEl = document.getElementById("music-playing");
       if (musicPlayingEl) musicPlayingEl.textContent = mediaStatus;
-      ipcRenderer.send("send-variable", { mediaStatus });
+      window.eve?.sendVariable({ mediaStatus });
     })
-    .catch((err) => {
+    .catch(() => {
       mediaStatus = "stopped";
       const musicPlayingEl = document.getElementById("music-playing");
       if (musicPlayingEl) musicPlayingEl.textContent = "Error";
-      ipcRenderer.send("send-variable", { mediaStatus });
+      window.eve?.sendVariable({ mediaStatus });
     });
 }
 
@@ -268,7 +251,7 @@ function autoFocus(isAutoFocusOn) {
 }
 autoFocus(true);
 
-// 更新immersive模式
+// 更新 immersive 模式
 const alphaSection = document.querySelector(".alphaSection");
 let savedAlphaSectionInnerHTML;
 const immAlphaSectionInnerHTML =
@@ -297,12 +280,12 @@ function toggleImmMode() {
     }
     alphaSection.innerHTML = immAlphaSectionInnerHTML;
     isImmOn = true;
-    ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+    window.eve?.sendVariable({ mediaStatus, isImmOn });
   } else {
     if (savedAlphaSectionInnerHTML) {
       alphaSection.innerHTML = savedAlphaSectionInnerHTML;
       isImmOn = false;
-      ipcRenderer.send("send-variable", { mediaStatus, isImmOn });
+      window.eve?.sendVariable({ mediaStatus, isImmOn });
     }
   }
 }

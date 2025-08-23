@@ -6,7 +6,8 @@
 // 若需重新啟動 JS server，可在 restartServices 中加入自定 reload 邏輯 (目前僅重啟 Python)
 
 const { setupConfigHotReload } = require("./configWatcher");
-const { app, Tray, Menu, dialog, shell, globalShortcut, nativeImage, ipcMain } = require("electron");
+const { app, Tray, Menu, dialog, shell, globalShortcut, nativeImage, ipcMain, BrowserWindow, screen } = require("electron");
+const { initScaleManager } = require("./scaleManager");
 const path = require("path");
 const fs = require("fs");
 const { spawn, exec } = require("child_process");
@@ -496,8 +497,26 @@ app.whenReady().then(() => {
   registerShortcuts();
   startPythonServer();
   createWindowsIfNeeded();
-  // 啟用設定檔熱更新（會自動做首次廣播與監看）
+
+  // 啟用設定檔熱更新
   setupConfigHotReload(() => [mainWin, mediaWin]);
+
+  // 初始化縮放管理，指定 afterApply：scale 套用後自動「隱藏→顯示」一次
+  const scaleMgr = initScaleManager(() => [mainWin, mediaWin], {
+    afterApply: () => {
+      // 僅在視窗目前已顯示時做隱藏→顯示，避免打開時亂跳
+      if (!mainWin || !mediaWin) return;
+      if (!windowsVisible) return;
+      hideWindows();
+      // 略等 100~150ms 讓縮放與佈局完成，再顯示
+      setTimeout(() => showWindows(), 120);
+    },
+  });
+
+  // 記錄初始尺寸作為縮放基準（避免倍數累加）
+  scaleMgr.captureBaseBounds();
+  if (mainWin) mainWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
+  if (mediaWin) mediaWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
 });
 
 // ------------------ 退出 ------------------

@@ -1,4 +1,5 @@
 const fs = require("fs/promises");
+const fssync = require("fs");
 const path = require("path");
 
 async function ensureDir(p) {
@@ -28,7 +29,12 @@ function resolveConfigDir(app) {
   if (app.isPackaged) {
     return path.join(app.getPath("userData"), "config");
   }
-  // 開發時：electron_app/config
+  // 開發模式：盡量容錯，支援從 repo 根目錄或 electron_app 目錄啟動
+  const candidates = [path.join(process.cwd(), "config"), path.join(process.cwd(), "electron_app", "config"), path.join(app.getAppPath(), "config")];
+  for (const dir of candidates) {
+    if (fssync.existsSync(dir)) return dir;
+  }
+  // 預設 fallback
   return path.join(process.cwd(), "config");
 }
 
@@ -39,20 +45,20 @@ async function ensureDefaultConfigs(app) {
   await writeJsonIfMissing(path.join(configDir, "theme.json"), {
     version: 1,
     theme: {
-      backgroundColor: [0, 0, 0], // 對應 --background-color (r,g,b)
-      backgroundOpacity: 0.25, // 對應 --background-opacity
-      backdropBlurPx: 20, // 對應 --backdrop-blur (px)
-      textColor: [255, 255, 255], // 對應 --text-color (r,g,b)
-      mainTextOpacity: 1, // 對應 --main-text-opacity
-      secondaryTextOpacity: 0.5, // 對應 --secondary-text-opacity
-      baseFontSizePx: 16, // 對應 :root font-size
+      backgroundColor: [0, 0, 0],
+      backgroundOpacity: 0.25,
+      backdropBlurPx: 20,
+      textColor: [255, 255, 255],
+      mainTextOpacity: 1,
+      secondaryTextOpacity: 0.5,
+      baseFontSizePx: 16,
     },
   });
 
   await writeJsonIfMissing(path.join(configDir, "ui.json"), {
     ui: {
-      scale: 1.0, // 會乘上 baseFontSizePx
-      windowOpacity: 0.98, // 套用在 <body> 的整體透明度
+      scale: 1.0,
+      windowOpacity: 1.0,
     },
   });
 

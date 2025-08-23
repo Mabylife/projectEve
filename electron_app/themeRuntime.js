@@ -1,8 +1,5 @@
-// renderer 側：即時把主進程廣播的 theme/ui 套用為 CSS 變數
-// 注意：你目前 BrowserWindow 啟用了 nodeIntegration: true, contextIsolation: false
-// 因此可以直接使用 require('electron').ipcRenderer
-
-const { ipcRenderer } = require("electron");
+// 用 preload 暴露的 API 套用 theme/ui
+// 重點：scale 不再動字級，改通知主程序做整頁縮放與視窗重算
 
 const defaultTheme = {
   version: 1,
@@ -40,29 +37,34 @@ function applyTheme(themeFile) {
   rootStyle.setProperty("--main-text-opacity", String(t.mainTextOpacity ?? 1));
   rootStyle.setProperty("--secondary-text-opacity", String(t.secondaryTextOpacity ?? 0.5));
 
-  // 設定 :root 字級（之後 ui.scale 再乘上來）
-  const base = Number(t.baseFontSizePx ?? 16);
-  document.documentElement.style.fontSize = `${base}px`;
+  // 只設定字體基準，避免和縮放打架
+  const baseFontPx = Math.max(8, Number(t.baseFontSizePx ?? 16));
+  document.documentElement.style.fontSize = `${baseFontPx}px`;
+}
+
+function clampScale(s) {
+  const n = Number(s);
+  if (!isFinite(n)) return 1.0;
+  return Math.min(3.0, Math.max(0.5, n));
 }
 
 function applyUi(uiFile) {
   const u = uiFile?.ui ?? defaultUi.ui;
 
-  // 根據 scale 調整 :root 字級
-  const baseSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  const scaled = Math.max(8, baseSizePx * Number(u.scale ?? 1.0));
-  document.documentElement.style.fontSize = `${scaled}px`;
-
   // 視窗內容整體透明度
   if (typeof u.windowOpacity === "number") {
     document.body.style.opacity = String(u.windowOpacity);
   }
+
+  // 整頁縮放 + 視窗尺寸/位置重算交給主程序
+  const s = clampScale(u.scale ?? 1.0);
+  window.eve?.setUiScale?.(s);
 }
 
-// 預設先套用，避免 FOUC
+// 預設先套用
 applyTheme(defaultTheme);
 applyUi(defaultUi);
 
-// 綁定 IPC
-ipcRenderer.on("theme:update", (_, data) => applyTheme(data));
-ipcRenderer.on("ui:update", (_, data) => applyUi(data));
+// 綁 IPC
+window.eve?.onThemeUpdate?.(applyTheme);
+window.eve?.onUiUpdate?.(applyUi);

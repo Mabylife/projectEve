@@ -1,7 +1,8 @@
 {
   "ui": {
-    "scale": 1.0,
-    "windowOpacity": 1,
-    "alwaysOnTop": true
+    "scale": 1,
+    "alwaysOnTop": true,
+    "nodeIntegration": true,
+    "contextIsolation": false
   }
 }
