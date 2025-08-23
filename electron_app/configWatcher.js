@@ -69,6 +69,23 @@ async function ensureDefaultConfigs() {
     },
   });
 
+  // 新增 commands.json 預設
+  await writeJsonIfMissing(path.join(configDir, "commands.json"), {
+    version: 1,
+    commands: [
+      {
+        id: "open_notepad",
+        name: "記事本",
+        action: { type: "process", cmd: "notepad.exe", args: [] },
+      },
+      {
+        id: "pause_media",
+        name: "媒體暫停/播放",
+        action: { type: "key", keys: ["mediaPlayPause"] },
+      },
+    ],
+  });
+
   return configDir;
 }
 
@@ -76,7 +93,8 @@ async function loadAllConfigs() {
   const dir = resolveConfigDir();
   const theme = (await readJsonSafe(path.join(dir, "theme.json"))) || {};
   const ui = (await readJsonSafe(path.join(dir, "ui.json"))) || {};
-  return { dir, theme, ui };
+  const commands = (await readJsonSafe(path.join(dir, "commands.json"))) || {};
+  return { dir, theme, ui, commands };
 }
 
 function broadcastToAll(getWindows, channel, payload) {
@@ -88,19 +106,21 @@ function broadcastToAll(getWindows, channel, payload) {
   });
 }
 
-// options: { onThemeChange?: (themeObj) => void, onUiChange?: (uiObj) => void }
+// options: { onThemeChange?, onUiChange?, onCommandsChange? }
 async function setupConfigHotReload(getWindows, options = {}) {
   const configDir = await ensureDefaultConfigs();
 
   // 初次載入並廣播
-  const { theme, ui } = await loadAllConfigs();
+  const { theme, ui, commands } = await loadAllConfigs();
   broadcastToAll(getWindows, "theme:update", theme);
   broadcastToAll(getWindows, "ui:update", ui);
+  broadcastToAll(getWindows, "commands:update", commands);
   options.onThemeChange?.(theme);
   options.onUiChange?.(ui);
+  options.onCommandsChange?.(commands, path.join(configDir, "commands.json"));
 
   // 監看變更
-  const targets = ["theme.json", "ui.json"].map((f) => path.join(configDir, f));
+  const targets = ["theme.json", "ui.json", "commands.json"].map((f) => path.join(configDir, f));
   const watcher = chokidar.watch(targets, { ignoreInitial: true });
 
   let timer;
@@ -116,6 +136,9 @@ async function setupConfigHotReload(getWindows, options = {}) {
       } else if (file === "ui.json") {
         broadcastToAll(getWindows, "ui:update", data);
         options.onUiChange?.(data);
+      } else if (file === "commands.json") {
+        broadcastToAll(getWindows, "commands:update", data);
+        options.onCommandsChange?.(data, changedPath);
       }
     }, 80);
   });

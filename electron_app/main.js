@@ -8,12 +8,14 @@
 const { setupConfigHotReload } = require("./configWatcher");
 const { app, Tray, Menu, dialog, shell, globalShortcut, nativeImage, ipcMain, BrowserWindow, screen } = require("electron");
 const { initScaleManager } = require("./scaleManager");
+const { initWsBridge } = require("./wsBridge");
 const path = require("path");
 const fs = require("fs");
 const { spawn, exec } = require("child_process");
 const net = require("net");
 const isPyPacked = false;
-const devMode = false; // 開發模式
+const devMode = true; // 開發模式
+const { initDataHub } = require("./dataHub");
 
 // ------------------ Mica ------------------
 let MicaBrowserWindow;
@@ -371,7 +373,7 @@ function showWindows() {
   });
 
   windowsVisible = true;
-  updateMediaVisibility(); // ← 加上這行
+  updateMediaVisibility();
   mainWin.webContents.send("focus-input");
 }
 
@@ -383,12 +385,51 @@ app.whenReady().then(() => {
   startPythonServer();
   createWindowsIfNeeded();
 
-  // 啟用設定檔熱更新：把 ui 變更回呼接進來
+  const dataHub = initDataHub({ getWindows: () => [mainWin, mediaWin], pyPort: 54321 });
+  dataHub.start();
+  app.once("before-quit", () => dataHub.stop());
+
+  // 啟用設定檔熱更新：把 ui / commands 變更回呼接進來
   setupConfigHotReload(() => [mainWin, mediaWin], {
     onUiChange: (ui) => {
       latestUiConfig = ui || latestUiConfig;
       updateMediaVisibility();
     },
+    onCommandsChange: async (commandsObj, filePath) => {
+      // 驗證 commands 基本格式
+      const ok = validateCommands(commandsObj);
+      if (!ok) {
+        writeLog("CFG", "commands.json 格式檢查失敗，略過通知 Python");
+        return;
+      }
+      // 通知 Python 重新載入（僅通知，不傳內容）
+      try {
+        const res = await fetch(`http://127.0.0.1:${PY_PORT}/reload-commands`, { method: "POST" });
+        writeLog("PY", "reload-commands 呼叫結果 ok=" + res.ok);
+      } catch (e) {
+        writeLog("PY-ERR", "reload-commands 呼叫失敗: " + e.message);
+      }
+    },
+  });
+
+  // 啟動 WS 橋接：Python → WS → main → IPC → UI
+  const wsUrl = `ws://127.0.0.1:${PY_PORT}/ws`;
+  const ws = initWsBridge({
+    url: wsUrl,
+    getWindows: () => [mainWin, mediaWin],
+    onMediaStatus: (status) => {
+      isPlaying = status === "playing" || status === "paused";
+      updateMediaVisibility();
+    },
+    onConnectChange: (ok) => writeLog("WS", ok ? "connected" : "disconnected"),
+    logger: writeLog,
+  });
+  ws.start();
+
+  app.once("before-quit", () => {
+    try {
+      ws.stop();
+    } catch {}
   });
 
   // 縮放管理（如果你已加）
@@ -564,52 +605,6 @@ if (!app.requestSingleInstanceLock()) {
 // ------------------ lifecycle ------------------
 app.on("window-all-closed", (e) => e.preventDefault());
 
-app.whenReady().then(() => {
-  debugPaths();
-  createTray();
-  registerShortcuts();
-  startPythonServer();
-  createWindowsIfNeeded();
-
-  // 啟用設定檔熱更新（此處也可拿到「首次載入」的 ui）
-  setupConfigHotReload(() => [mainWin, mediaWin], {
-    onUiChange: (ui) => {
-      // 任何時候都更新 latest（給其他欄位熱更新用）
-      latestUiConfig = ui || latestUiConfig;
-
-      // 解析預設沉浸狀態（只用於「啟動初次套用」）
-      desiredImmOn = parseImmersiveFromUi(latestUiConfig);
-
-      // 僅在「尚未套用過」時送一次 imm:set；之後不再隨 ui.json 熱更新
-      if (!immAppliedOnce) {
-        if (mainWin && !mainWin.isDestroyed()) {
-          mainWin.webContents.send("imm:set", desiredImmOn);
-        }
-        isImmOn = !!desiredImmOn; // 讓主行程的 auto 規則馬上生效
-        updateMediaVisibility();
-        immAppliedOnce = true;
-      }
-    },
-  });
-
-  // 視窗載入完成後，若還沒成功送過，補送一次
-  if (mainWin) {
-    mainWin.webContents.once("did-finish-load", () => {
-      if (!immAppliedOnce) {
-        mainWin.webContents.send("imm:set", desiredImmOn);
-        isImmOn = !!desiredImmOn;
-        updateMediaVisibility();
-        immAppliedOnce = true;
-      }
-    });
-  }
-
-  // 記錄初始尺寸作為縮放基準（避免倍數累加）
-  scaleMgr.captureBaseBounds();
-  if (mainWin) mainWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
-  if (mediaWin) mediaWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
-});
-
 // ------------------ 退出 ------------------
 async function cleanExit() {
   if (exiting) return;
@@ -664,3 +659,15 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   writeLog("SYS-ERR", "unhandledRejection: " + reason);
 });
+
+// --------- 小工具：commands 驗證 ---------
+function validateCommands(obj) {
+  if (!obj || typeof obj !== "object") return false;
+  if (!Array.isArray(obj.commands)) return false;
+  for (const c of obj.commands) {
+    if (!c || typeof c !== "object") return false;
+    if (!c.name || !c.action) return false;
+    if (!c.id) return false;
+  }
+  return true;
+}

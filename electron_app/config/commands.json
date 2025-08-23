@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "id": "open_notepad",
+      "name": "記事本",
+      "action": {
+        "type": "process",
+        "cmd": "notepad.exe",
+        "args": []
+      }
+    },
+    {
+      "id": "pause_media",
+      "name": "媒體暫停/播放",
+      "action": {
+        "type": "key",
+        "keys": [
+          "mediaPlayPause"
+        ]
+      }
+    }
+  ]
+}

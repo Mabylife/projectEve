@@ -1,5 +1,5 @@
 from quart_cors import cors
-from quart import Quart, jsonify, request
+from quart import Quart, jsonify, request, websocket  # [新增] websocket
 import httpx
 import math
 import re
@@ -11,6 +11,10 @@ import subprocess
 import psutil
 import ctypes
 import urllib.parse
+import os  # [新增]
+import json  # [新增]
+import sys  # [新增]
+from pathlib import Path  # [新增]
 from ctypes import wintypes
 
 try:
@@ -40,6 +44,42 @@ def create_app() -> Quart:
 
 app = create_app()
 
+# [新增] WebSocket 客戶端集合與命令快取
+WS_CLIENTS = set()
+LOADED_COMMANDS = {"version": 1, "commands": []}
+
+
+# [新增] 路徑解析：commands.json 所在目錄
+def _exe_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent
+
+
+def _resolve_config_dir() -> Path:
+    env = os.environ.get("EVE_CONFIG_DIR")
+    if env:
+        p = Path(env)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    # 嘗試常見結構：<repo>/electron_app/config 或 <repo>/config
+    start = _exe_dir()
+    candidates = [
+        start.parent.parent / "config",  # electron_app/config
+        start.parent.parent.parent / "config",  # repo 根/config
+        start / "config",  # 與 exe 同層 config
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    fallback = start / "config"
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
+CONFIG_DIR = _resolve_config_dir()
+COMMANDS_FILE = CONFIG_DIR / "commands.json"
+
 
 def _status_name(status_enum):
     if PlaybackStatus is None:
@@ -53,6 +93,21 @@ def _status_name(status_enum):
         PlaybackStatus.PLAYING: "Playing",
     }
     return mapping.get(status_enum, str(status_enum))
+
+
+def _normalize_media_status(name: str) -> str:
+    """
+    統一回傳 playing/paused/stopped 三種狀態，配合 Electron main.js 的自動顯示規則
+    """
+    if not name:
+        return "stopped"
+    n = name.strip().lower()
+    if n.startswith("play"):
+        return "playing"
+    if n.startswith("pause"):
+        return "paused"
+    # Changing / Opened / Stopped / Closed -> stopped
+    return "stopped"
 
 
 async def _gather_sessions_detail():
@@ -102,6 +157,22 @@ async def _gather_sessions_detail():
     except Exception as e:
         log(f"_gather_sessions_detail: manager error {e}")
     return details
+
+
+async def _best_media_snapshot():
+    """
+    取分數最高的媒體 session，回傳 (normalized_status, meta_dict)
+    meta_dict 至少包含 { title, statusName }
+    """
+    details = await _gather_sessions_detail()
+    if not details:
+        return "stopped", {"title": None, "statusName": None}
+    best = sorted(details, key=lambda d: d.get("score", 0), reverse=True)[0]
+    norm = _normalize_media_status(best.get("statusName"))
+    return norm, {
+        "title": best.get("title"),
+        "statusName": best.get("statusName")
+    }
 
 
 def open_url(url: str):
@@ -549,6 +620,92 @@ async def terminal_run():
     return jsonify(result)
 
 
+# [新增] 簡易健康檢查
+@app.route("/health")
+async def health():
+    return jsonify({"ok": True})
+
+
+# [新增] reload-commands：接到通知後重讀 commands.json（目前伺服端不使用，先保存在 LOADED_COMMANDS）
+@app.route("/reload-commands", methods=["POST"])
+async def reload_commands():
+    global LOADED_COMMANDS
+    try:
+        if COMMANDS_FILE.exists():
+            with open(COMMANDS_FILE, "r", encoding="utf-8") as f:
+                LOADED_COMMANDS = json.load(f)
+        else:
+            LOADED_COMMANDS = {"version": 1, "commands": []}
+        # 可選：把重新載入訊息廣播給 WS 客戶端
+        await _ws_broadcast({
+            "type": "commands",
+            "count": len(LOADED_COMMANDS.get("commands", []))
+        })
+        return jsonify({"ok": True})
+    except Exception as e:
+        log(f"reload-commands error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# [新增] WebSocket 端點
+@app.websocket("/ws")
+async def ws_endpoint():
+    ws = websocket._get_current_object()
+    WS_CLIENTS.add(ws)
+    try:
+        # 初次連線：打招呼＋同步一次媒體狀態
+        await ws.send(json.dumps({"type": "hello", "from": "pyserver"}))
+        status, meta = await _best_media_snapshot()
+        await ws.send(
+            json.dumps({
+                "type": "media",
+                "mediaStatus": status,
+                "meta": meta
+            },
+                       ensure_ascii=False))
+        # 接受但忽略客戶端訊息（如需可擴充）
+        while True:
+            try:
+                await websocket.receive()
+            except Exception:
+                # 連線中斷
+                break
+    finally:
+        WS_CLIENTS.discard(ws)
+
+
+async def _ws_broadcast(obj: dict):
+    if not WS_CLIENTS:
+        return
+    text = json.dumps(obj, ensure_ascii=False)
+    stale = []
+    for ws in list(WS_CLIENTS):
+        try:
+            await ws.send(text)
+        except Exception:
+            stale.append(ws)
+    for s in stale:
+        WS_CLIENTS.discard(s)
+
+
+# [新增] 背景任務：輪詢媒體狀態變化並推送給 WS
+async def _media_watchdog():
+    last = None
+    while True:
+        try:
+            status, meta = await _best_media_snapshot()
+            if status != last:
+                await _ws_broadcast({
+                    "type": "media",
+                    "mediaStatus": status,
+                    "meta": meta
+                })
+                last = status
+        except Exception as e:
+            log(f"_media_watchdog error: {e}")
+        await asyncio.sleep(2.0)
+
+
 async def main():
     shutdown_event = asyncio.Event()
 
@@ -560,6 +717,27 @@ async def main():
 
     async def shutdown_trigger():
         await shutdown_event.wait()
+
+    # [新增] 啟動前建立背景任務
+    @app.before_serving
+    async def _startup():
+        try:
+            # 預先讀取 commands.json
+            if COMMANDS_FILE.exists():
+                with open(COMMANDS_FILE, "r", encoding="utf-8") as f:
+                    global LOADED_COMMANDS
+                    LOADED_COMMANDS = json.load(f)
+        except Exception as e:
+            log(f"load commands at startup error: {e}")
+        app.background_tasks = set()
+        app.background_tasks.add(asyncio.create_task(_media_watchdog()))
+        log("Background tasks started.")
+
+    @app.after_serving
+    async def _cleanup():
+        for t in getattr(app, "background_tasks", set()):
+            t.cancel()
+        log("Background tasks cancelled.")
 
     from hypercorn.asyncio import serve
     from hypercorn.config import Config
