@@ -158,6 +158,8 @@
     setText(document.querySelector("[data-eve-media-status]"), state.media.status || "");
     setImg(document.querySelector("[data-eve-media-thumb]"), state.media.thumbnail || "");
     setAttr(document.body, "data-media-status", state.media.status);
+    // Also update the music playing status in the status section
+    updateMusicPlayingUI();
   }
 
   function updateDiskUI() {
@@ -176,6 +178,37 @@
     const q = state.quote || {};
     setText(document.querySelector("[data-eve-quote-text]"), q.quote || "");
     setText(document.querySelector("[data-eve-quote-author]"), q.author || "");
+  }
+
+  // New: Date/Time updates (should be local, not from server)
+  function updateDateTime() {
+    const now = new Date();
+    const weekday = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const dateStr = `${now.getMonth() + 1}/${now.getDate()} ${weekday[now.getDay()]}`;
+
+    let hour = now.getHours();
+    let min = now.getMinutes();
+    let ampm = hour >= 12 ? "PM" : "AM";
+    hour %= 12;
+    if (hour === 0) {
+      hour = 12;
+    }
+    min = min < 10 ? "0" + min : min;
+    const timeStr = `${hour}:${min} ${ampm}`;
+
+    setText(document.querySelector("#date"), dateStr);
+    setText(document.querySelector("#time"), timeStr);
+  }
+
+  // New: Power mode updates
+  function updatePowerModeUI(mode) {
+    setText(document.querySelector("#power-mode"), mode || "silent");
+  }
+
+  // New: Media playing status updates  
+  function updateMusicPlayingUI() {
+    const status = state.media.status || "stopped";
+    setText(document.querySelector("#music-playing"), status);
   }
 
   // ------------------------
@@ -254,6 +287,9 @@
             outputContainer.scrollTop = outputContainer.scrollHeight;
             
             // Handle special actions from terminal commands
+            if (res.data.isChangePowerMode) {
+              updatePowerModeUI(res.data.mode);
+            }
             if (res.data.isToggleImmMode) {
               setImmersive(!state.isImmOn);
             }
@@ -326,6 +362,26 @@
     } catch {}
   }
 
+  // ------------------------
+  // Auto-focus functionality
+  // ------------------------
+  function autoFocus(isAutoFocusOn) {
+    const input = document.querySelector("[data-eve-console-input]") || document.querySelector("#terminalInput");
+    if (!input) return;
+    
+    const terminalInputBlurHandler = function () {
+      if (isAutoFocusOn) {
+        input.focus();
+      }
+    };
+    
+    if (isAutoFocusOn) {
+      input.addEventListener("blur", terminalInputBlurHandler);
+    } else {
+      input.removeEventListener("blur", terminalInputBlurHandler);
+    }
+  }
+
   // 對外
   window.EVE_RENDERER = {
     setImmersive,
@@ -336,6 +392,14 @@
   document.addEventListener("DOMContentLoaded", () => {
     bindIpc();
     bindDomEvents();
+    
+    // Start auto-focus for terminal input
+    autoFocus(true);
+    
+    // Start date/time updates every second
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+    
     // 要求 Main 立刻拉一次所有非即時資料（Main 收到後會 broadcast）
     api.refreshAll();
     console.debug("[EVE] Renderer started. Waiting IPC updates from Main...");
