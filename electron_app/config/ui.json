@@ -7,6 +7,6 @@
     "mediaWindow": {
       "visibilityMode": "auto"
     },
-    "immersive_mode": "off"
+    "immersive_mode": "on"
   }
 }
