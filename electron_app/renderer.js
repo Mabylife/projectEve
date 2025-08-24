@@ -33,6 +33,7 @@
     media: {
       status: "stopped",
       title: null,
+      author: null,
       statusName: null,
       thumbnail: null,
       duration: null,
@@ -111,6 +112,7 @@
     if (!first) return;
 
     state.media.title = first.title || null;
+    state.media.author = first.artist || null;  // Extract artist field as author
     state.media.status = normalizeMediaStatus(first.state);
     state.media.thumbnail = first.thumbnail || null;
     state.media.duration = first.duration ?? null;
@@ -135,6 +137,7 @@
       }
       const meta = pkt.meta || {};
       if (typeof meta.title !== "undefined") state.media.title = meta.title;
+      if (typeof meta.artist !== "undefined") state.media.author = meta.artist;
       if (typeof meta.statusName !== "undefined") state.media.statusName = meta.statusName;
       updateMediaUI();
       reflectMediaToMain();
