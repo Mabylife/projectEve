@@ -1,10 +1,18 @@
 {
   "version": 1,
   "theme": {
-    "backgroundColor": [0, 0, 0],
+    "backgroundColor": [
+      0,
+      0,
+      0
+    ],
     "backgroundOpacity": 0,
     "backdropBlurPx": 20,
-    "textColor": [255, 255, 255],
+    "textColor": [
+      255,
+      255,
+      255
+    ],
     "mainTextOpacity": 1,
     "secondaryTextOpacity": 0.5,
     "fontFamily": "Space Mono"
