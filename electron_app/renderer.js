@@ -45,6 +45,9 @@
     isImmOn: false,
   };
 
+  // Track if this is the initial application load
+  let isInitialLoad = true;
+
   // ------------------------
   // 主題 / UI 設定套用
   // ------------------------
@@ -89,11 +92,14 @@
     const baseSize = state.theme?.theme?.baseFontSizePx ?? 16;
     document.documentElement.style.setProperty("--eve-font-size", `${baseSize * scale}px`);
 
-    if (typeof u.immersive_mode === "string") {
-      const v = u.immersive_mode.toLowerCase();
+    if (typeof u.default_immersive_mode === "string" && isInitialLoad) {
+      const v = u.default_immersive_mode.toLowerCase();
       state.isImmOn = v === "on";
       reflectMediaToMain();
     }
+
+    // After initial load, prevent default immersive mode from being applied again
+    isInitialLoad = false;
   }
 
   // ------------------------

@@ -27,7 +27,7 @@ try {
 }
 
 // ------------------ 狀態 ------------------
-let latestUiConfig = { ui: { mediaWindow: { visibilityMode: "auto" }, immersive_mode: "off" } };
+let latestUiConfig = { ui: { mediaWindow: { visibilityMode: "auto" }, default_immersive_mode: "off" } };
 let tray = null;
 let pyProc = null;
 let mainWin = null;

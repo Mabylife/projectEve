@@ -65,7 +65,7 @@ async function ensureDefaultConfigs() {
       mediaWindow: {
         visibilityMode: "auto",
       },
-      immersive_mode: "on",
+      default_immersive_mode: "on",
     },
   });
 
