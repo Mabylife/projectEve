@@ -30,6 +30,7 @@
   const state = {
     theme: null,
     ui: null,
+    commands: null,
     media: {
       status: "stopped",
       title: null,
@@ -257,6 +258,11 @@
     api.on("ui:update", (_e, data) => {
       console.debug("[EVE][IPC] ui:update", data);
       applyUiConfig(data);
+    });
+    api.on("commands:update", (_e, data) => {
+      console.debug("[EVE][IPC] commands:update", data);
+      state.commands = data;
+      // Commands are handled server-side, just store the config for potential future use
     });
     api.on("realtime:update", (_e, pkt) => {
       console.debug("[EVE][IPC] realtime:update", pkt);
