@@ -112,7 +112,7 @@
     if (!first) return;
 
     state.media.title = first.title || null;
-    state.media.author = first.artist || null;  // Extract artist field as author
+    state.media.author = first.artist || null; // Extract artist field as author
     state.media.status = normalizeMediaStatus(first.state);
     state.media.thumbnail = first.thumbnail || null;
     state.media.duration = first.duration ?? null;
@@ -161,17 +161,17 @@
     console.log("[EVE] Updating media UI:", state.media);
     setText(document.querySelector("[data-eve-media-title]"), state.media.title || "");
     setText(document.querySelector("[data-eve-media-status]"), state.media.status || "");
-    setImg(document.querySelector("[data-eve-media-thumb]"), state.media.thumbnail || "");
+    setImg(document.querySelector("[data-eve-media-thumb]"), state.media.thumbnail || "../assets/defaultThumbnail.svg");
     setText(document.querySelector("[data-eve-media-author]"), state.media.author || "");
     setText(document.querySelector("[data-eve-media-time]"), displayTime || "");
-    
+
     // 更新進度條 (僅在 immersive 模式)
     const progressBar = document.querySelector(".progress-bar");
     if (progressBar && state.isImmOn) {
       const progress = renderProgressBar(state.media.position, state.media.duration);
       setText(progressBar, progress);
     }
-    
+
     setAttr(document.body, "data-media-status", state.media.status);
     // Also update the music playing status in the status section
     updateMusicPlayingUI();
@@ -428,23 +428,23 @@
   function setImmersive(on) {
     state.isImmOn = !!on;
     setAttr(document.body, "data-immersive", String(state.isImmOn));
-    
+
     // 切換 upperPart 的 class
     const upperPart = document.querySelector(".upperPart");
     const alphaSection = document.querySelector(".alphaSection");
-    
+
     if (upperPart && alphaSection) {
       if (state.isImmOn) {
         // 進入 immersive 模式
         upperPart.classList.remove("immOff");
         upperPart.classList.add("immOn");
         alphaSection.classList.remove("daily_quote");
-        
+
         // 保存原始內容
         if (!alphaSection.dataset.originalContent) {
           alphaSection.dataset.originalContent = alphaSection.innerHTML;
         }
-        
+
         // 替換為 immersive 媒體內容
         alphaSection.innerHTML = `
           <div class="imm">
@@ -460,7 +460,7 @@
             </div>
           </div>
         `;
-        
+
         // 重新綁定媒體數據到新的 DOM 元素
         updateMediaUI();
       } else {
@@ -468,14 +468,14 @@
         upperPart.classList.remove("immOn");
         upperPart.classList.add("immOff");
         alphaSection.classList.add("daily_quote");
-        
+
         // 恢復原始內容
         if (alphaSection.dataset.originalContent) {
           alphaSection.innerHTML = alphaSection.dataset.originalContent;
         }
       }
     }
-    
+
     try {
       api.setMediaAndImmersive({ mediaStatus: state.media.status, isImmOn: state.isImmOn });
     } catch {}
