@@ -145,12 +145,11 @@
   }
 
   function reflectMediaToMain() {
-    try {
-      api.setMediaAndImmersive({
-        mediaStatus: state.media.status,
-        isImmOn: state.isImmOn,
-      });
-    } catch {}
+    console.log("[EVE] Reflecting media status to Main:", state.isImmOn);
+    api.setMediaAndImmersive({
+      mediaStatus: state.media.status,
+      isImmOn: state.isImmOn,
+    });
   }
 
   // ------------------------
@@ -158,7 +157,6 @@
   // ------------------------
   function updateMediaUI() {
     let displayTime = `${state.media.position || "--"} / ${state.media.duration || "--"}`;
-    console.log("[EVE] Updating media UI:", state.media);
     setText(document.querySelector("[data-eve-media-title]"), state.media.title || "");
     setText(document.querySelector("[data-eve-media-status]"), state.media.status || "");
     setImg(document.querySelector("[data-eve-media-thumb]"), state.media.thumbnail || "../assets/defaultThumbnail.svg");
