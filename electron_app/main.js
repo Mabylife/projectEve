@@ -14,7 +14,7 @@ const fs = require("fs");
 const { spawn, exec } = require("child_process");
 const net = require("net");
 const isPyPacked = false;
-const devMode = true; // 開發模式
+const devMode = false; // 開發模式
 const { initDataHub } = require("./dataHub");
 
 // ------------------ Mica ------------------
@@ -28,8 +28,6 @@ try {
 
 // ------------------ 狀態 ------------------
 let latestUiConfig = { ui: { mediaWindow: { visibilityMode: "auto" }, immersive_mode: "off" } };
-let desiredImmOn = false;
-let immAppliedOnce = false;
 let tray = null;
 let pyProc = null;
 let mainWin = null;
@@ -67,11 +65,6 @@ function resourcePath(...segments) {
   } else {
     return path.join(__dirname, ...segments);
   }
-}
-
-function parseImmersiveFromUi(uiObj) {
-  const v = (uiObj?.ui?.immersive_mode || "").toString().toLowerCase();
-  return v === "on";
 }
 
 // ------------------ 日誌 ------------------
@@ -614,9 +607,7 @@ ipcMain.on("send-variable", (event, data) => {
     if (mediaWin && event.sender === mediaWin.webContents) {
       return;
     }
-    console.log("[EVE] Received send-variable:", data);
     if (Object.prototype.hasOwnProperty.call(data, "isImmOn")) {
-      console.log("[EVE] Updating immersive mode:", data.isImmOn);
       isImmOn = data.isImmOn;
     }
     const status = data.mediaStatus;

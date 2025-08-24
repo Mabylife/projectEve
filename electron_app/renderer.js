@@ -145,7 +145,6 @@
   }
 
   function reflectMediaToMain() {
-    console.log("[EVE] Reflecting media status to Main:", state.isImmOn);
     api.setMediaAndImmersive({
       mediaStatus: state.media.status,
       isImmOn: state.isImmOn,
