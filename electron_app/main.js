@@ -47,7 +47,7 @@ let pyRestartCount = 0;
 
 // 輪詢間隔設定 (毫秒) - 可根據需要調整
 const POLL_INTERVALS = {
-  media: 2_000,      // 2 秒 - 媒體狀態更新頻率
+  media: 1_000,      // 1 秒 - 媒體狀態更新頻率
   disk: 60_000,      // 1 分鐘 - 磁碟空間
   recyclebin: 60_000, // 1 分鐘 - 回收桶
   quote: 600_000,    // 10 分鐘 - 每日金句
