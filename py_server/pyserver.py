@@ -409,11 +409,16 @@ async def get_media():
                 res = {
                     "title": getattr(info, "title", None),
                     "artist": getattr(info, "artist", None),
+                    "album": getattr(info, "album_title", None),  # Additional useful property
                     "state":
                     _status_name(state) if state is not None else None,
                     "position": position,
                     "duration": duration,
                     "thumbnail": thumbnail_b64,
+                    # Future extensibility - these could be added when needed:
+                    # "album_artist": getattr(info, "album_artist", None),
+                    # "track_number": getattr(info, "track_number", None),
+                    # "subtitle": getattr(info, "subtitle", None),
                 }
                 result_list.append(res)
             except Exception as e:

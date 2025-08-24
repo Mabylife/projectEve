@@ -39,6 +39,7 @@ let refreshWindowsPreference = true; // 是否允許創建視窗
 let isPlaying = false;
 let isImmOn = false;
 let windowsVisible = false;
+let lastMediaVisible = false; // Track last media window visibility state
 const autoShowFirstToggle = true;
 
 const PY_PORT = 54321;
@@ -47,10 +48,10 @@ let pyRestartCount = 0;
 
 // 輪詢間隔設定 (毫秒) - 可根據需要調整
 const POLL_INTERVALS = {
-  media: 1_000,      // 1 秒 - 媒體狀態更新頻率
-  disk: 60_000,      // 1 分鐘 - 磁碟空間
+  media: 1_000, // 1 秒 - 媒體狀態更新頻率
+  disk: 60_000, // 1 分鐘 - 磁碟空間
   recyclebin: 60_000, // 1 分鐘 - 回收桶
-  quote: 600_000,    // 10 分鐘 - 每日金句
+  quote: 600_000, // 10 分鐘 - 每日金句
 };
 
 let lastPyStart = 0;
@@ -397,10 +398,10 @@ app.whenReady().then(() => {
   startPythonServer();
   createWindowsIfNeeded();
 
-  const dataHub = initDataHub({ 
-    getWindows: () => [mainWin, mediaWin], 
+  const dataHub = initDataHub({
+    getWindows: () => [mainWin, mediaWin],
     pyPort: PY_PORT,
-    pollIntervals: POLL_INTERVALS 
+    pollIntervals: POLL_INTERVALS,
   });
   dataHub.start();
   app.once("before-quit", () => dataHub.stop());
@@ -471,6 +472,7 @@ function hideWindows() {
   if (mainWin) mainWin.hide();
   if (mediaWin) mediaWin.hide();
   windowsVisible = false;
+  lastMediaVisible = false; // Reset media visibility state when hiding all windows
 }
 
 function toggleWindows() {
@@ -489,27 +491,32 @@ function getMediaVisibilityMode() {
 function updateMediaVisibility() {
   if (!mediaWin) return;
 
+  let shouldBeVisible = false;
+
   // 若主介面目前沒顯示，media 一律隱藏
   if (!windowsVisible) {
-    mediaWin.hide();
-    return;
-  }
-
-  const mode = getMediaVisibilityMode();
-  if (mode === "never") {
-    mediaWin.hide();
-    return;
-  }
-  if (mode === "always") {
-    if (!mediaWin.isVisible()) mediaWin.showInactive();
-    return;
-  }
-
-  // auto：沿用既有條件（正在播放 且 非沉浸模式）
-  if (isPlaying && !isImmOn) {
-    if (!mediaWin.isVisible()) mediaWin.showInactive();
+    shouldBeVisible = false;
   } else {
-    mediaWin.hide();
+    const mode = getMediaVisibilityMode();
+    if (mode === "never") {
+      shouldBeVisible = false;
+    } else if (mode === "always") {
+      shouldBeVisible = true;
+    } else {
+      // auto：沿用既有條件（正在播放 且 非沉浸模式）
+      shouldBeVisible = isPlaying && !isImmOn;
+    }
+  }
+
+  // Only update visibility if state actually changed
+  if (shouldBeVisible !== lastMediaVisible) {
+    if (shouldBeVisible) {
+      if (!mediaWin.isVisible()) mediaWin.showInactive();
+    } else {
+      mediaWin.hide();
+    }
+    lastMediaVisible = shouldBeVisible;
+    writeLog("MEDIA_VIS", `Media window visibility changed to: ${shouldBeVisible}`);
   }
 }
 
@@ -603,7 +610,13 @@ function registerShortcuts() {
 // ------------------ IPC ------------------
 ipcMain.on("send-variable", (event, data) => {
   try {
+    // Ignore updates from media window to avoid conflicting state
+    if (mediaWin && event.sender === mediaWin.webContents) {
+      return;
+    }
+    console.log("[EVE] Received send-variable:", data);
     if (Object.prototype.hasOwnProperty.call(data, "isImmOn")) {
+      console.log("[EVE] Updating immersive mode:", data.isImmOn);
       isImmOn = data.isImmOn;
     }
     const status = data.mediaStatus;
