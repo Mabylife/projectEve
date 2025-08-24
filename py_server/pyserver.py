@@ -409,11 +409,16 @@ async def get_media():
                 res = {
                     "title": getattr(info, "title", None),
                     "artist": getattr(info, "artist", None),
+                    "album": getattr(info, "album_title", None),  # Additional useful property
                     "state":
                     _status_name(state) if state is not None else None,
                     "position": position,
                     "duration": duration,
                     "thumbnail": thumbnail_b64,
+                    # Future extensibility - these could be added when needed:
+                    # "album_artist": getattr(info, "album_artist", None),
+                    # "track_number": getattr(info, "track_number", None),
+                    # "subtitle": getattr(info, "subtitle", None),
                 }
                 result_list.append(res)
             except Exception as e:
@@ -688,22 +693,8 @@ async def _ws_broadcast(obj: dict):
         WS_CLIENTS.discard(s)
 
 
-# [新增] 背景任務：輪詢媒體狀態變化並推送給 WS
-async def _media_watchdog():
-    last = None
-    while True:
-        try:
-            status, meta = await _best_media_snapshot()
-            if status != last:
-                await _ws_broadcast({
-                    "type": "media",
-                    "mediaStatus": status,
-                    "meta": meta
-                })
-                last = status
-        except Exception as e:
-            log(f"_media_watchdog error: {e}")
-        await asyncio.sleep(2.0)
+# [新增] 背景任務已移除：現在由 Main 進程定時輪詢，而非 Python 自主推送
+# 這樣頻率更清楚且易於調整
 
 
 async def main():
@@ -730,8 +721,8 @@ async def main():
         except Exception as e:
             log(f"load commands at startup error: {e}")
         app.background_tasks = set()
-        app.background_tasks.add(asyncio.create_task(_media_watchdog()))
-        log("Background tasks started.")
+        # 移除 media watchdog - 現在由 Main 進程定時輪詢
+        log("Background tasks started (media polling removed, handled by Main).")
 
     @app.after_serving
     async def _cleanup():
