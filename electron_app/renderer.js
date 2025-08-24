@@ -161,9 +161,34 @@
     setImg(document.querySelector("[data-eve-media-thumb]"), state.media.thumbnail || "");
     setText(document.querySelector("[data-eve-media-author]"), state.media.author || "");
     setText(document.querySelector("[data-eve-media-time]"), displayTime || "");
+    
+    // 更新進度條 (僅在 immersive 模式)
+    const progressBar = document.querySelector(".progress-bar");
+    if (progressBar && state.isImmOn) {
+      const progress = renderProgressBar(state.media.position, state.media.duration);
+      setText(progressBar, progress);
+    }
+    
     setAttr(document.body, "data-media-status", state.media.status);
     // Also update the music playing status in the status section
     updateMusicPlayingUI();
+  }
+
+  function renderProgressBar(position, duration, totalBars = 20) {
+    if (typeof position !== "number" || typeof duration !== "number" || duration === 0) {
+      return "[--------------------]";
+    }
+    const progress = Math.floor((position / duration) * totalBars);
+    let bar = "[";
+    for (let i = 0; i < totalBars; i++) {
+      if (i === progress) {
+        bar += "O";
+      } else {
+        bar += "-";
+      }
+    }
+    bar += "]";
+    return bar;
   }
 
   function updateDiskUI() {
@@ -400,6 +425,54 @@
   function setImmersive(on) {
     state.isImmOn = !!on;
     setAttr(document.body, "data-immersive", String(state.isImmOn));
+    
+    // 切換 upperPart 的 class
+    const upperPart = document.querySelector(".upperPart");
+    const alphaSection = document.querySelector(".alphaSection");
+    
+    if (upperPart && alphaSection) {
+      if (state.isImmOn) {
+        // 進入 immersive 模式
+        upperPart.classList.remove("immOff");
+        upperPart.classList.add("immOn");
+        alphaSection.classList.remove("daily_quote");
+        
+        // 保存原始內容
+        if (!alphaSection.dataset.originalContent) {
+          alphaSection.dataset.originalContent = alphaSection.innerHTML;
+        }
+        
+        // 替換為 immersive 媒體內容
+        alphaSection.innerHTML = `
+          <div class="imm">
+            <small class="fetch-status">/ media</small>
+            <div>
+              <img class="song-thumbnail" src="assets/defaultThumbnail.svg" alt="" data-eve-media-thumb />
+              <div class="rightPart">
+                <div><span class="small">Song</span><span class="normal song-title" data-eve-media-title>--</span></div>
+                <div><span class="small">Author</span><span class="normal song-author" data-eve-media-author>--</span></div>
+                <div><span class="small">Time</span><span class="normal song-time" data-eve-media-time>--</span></div>
+                <p class="normal progress-bar">[--------------------]</p>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        // 重新綁定媒體數據到新的 DOM 元素
+        updateMediaUI();
+      } else {
+        // 退出 immersive 模式
+        upperPart.classList.remove("immOn");
+        upperPart.classList.add("immOff");
+        alphaSection.classList.add("daily_quote");
+        
+        // 恢復原始內容
+        if (alphaSection.dataset.originalContent) {
+          alphaSection.innerHTML = alphaSection.dataset.originalContent;
+        }
+      }
+    }
+    
     try {
       api.setMediaAndImmersive({ mediaStatus: state.media.status, isImmOn: state.isImmOn });
     } catch {}

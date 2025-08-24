@@ -45,6 +45,14 @@ const PY_PORT = 54321;
 const MAX_RESTART = 5;
 let pyRestartCount = 0;
 
+// 輪詢間隔設定 (毫秒) - 可根據需要調整
+const POLL_INTERVALS = {
+  media: 2_000,      // 2 秒 - 媒體狀態更新頻率
+  disk: 60_000,      // 1 分鐘 - 磁碟空間
+  recyclebin: 60_000, // 1 分鐘 - 回收桶
+  quote: 600_000,    // 10 分鐘 - 每日金句
+};
+
 let lastPyStart = 0;
 let restarting = false;
 let exiting = false;
@@ -389,13 +397,22 @@ app.whenReady().then(() => {
   startPythonServer();
   createWindowsIfNeeded();
 
-  const dataHub = initDataHub({ getWindows: () => [mainWin, mediaWin], pyPort: 54321 });
+  const dataHub = initDataHub({ 
+    getWindows: () => [mainWin, mediaWin], 
+    pyPort: PY_PORT,
+    pollIntervals: POLL_INTERVALS 
+  });
   dataHub.start();
   app.once("before-quit", () => dataHub.stop());
 
   // 啟用設定檔熱更新：把 ui / commands 變更回呼接進來
   setupConfigHotReload(() => [mainWin, mediaWin], {
+    onThemeChange: (theme) => {
+      writeLog("CFG", "Theme updated, broadcasting to renderers");
+      // Theme changes are automatically broadcast by setupConfigHotReload
+    },
     onUiChange: (ui) => {
+      writeLog("CFG", "UI config updated");
       latestUiConfig = ui || latestUiConfig;
       updateMediaVisibility();
     },

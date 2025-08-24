@@ -31,6 +31,7 @@ function initDataHub({ getWindows, pyPort = 54321, pollIntervals = {} }) {
     disk: pollIntervals.disk ?? 60_000,
     recyclebin: pollIntervals.recyclebin ?? 60_000,
     quote: pollIntervals.quote ?? 600_000,
+    media: pollIntervals.media ?? 2_000, // 2 秒輪詢媒體狀態，可配置
     mediaOnce: 0, // 開機後做一次快照
   };
 
@@ -38,6 +39,7 @@ function initDataHub({ getWindows, pyPort = 54321, pollIntervals = {} }) {
     disk: null,
     recyclebin: null,
     quote: null,
+    media: null, // 定期媒體輪詢
     mediaOnce: null,
   };
 
@@ -134,6 +136,13 @@ function initDataHub({ getWindows, pyPort = 54321, pollIntervals = {} }) {
     } catch {}
   }
 
+  async function pollMedia() {
+    try {
+      const list = await httpGetJson("/media");
+      broadcast(getWindows, "media:update", { type: "media:snapshot", list });
+    } catch {}
+  }
+
   async function pollMediaOnceSnapshot() {
     try {
       const list = await httpGetJson("/media"); // 一次性快照
@@ -146,6 +155,10 @@ function initDataHub({ getWindows, pyPort = 54321, pollIntervals = {} }) {
 
     // 一次性快照（避免 UI 等 WS 才有畫面）
     timers.mediaOnce = setTimeout(pollMediaOnceSnapshot, 300);
+
+    // 定期輪詢媒體狀態 (取代 Python 端的 watchdog)
+    timers.media = setInterval(pollMedia, intv.media);
+    pollMedia(); // 立即執行一次
 
     timers.disk = setInterval(pollDisk, intv.disk);
     pollDisk();
