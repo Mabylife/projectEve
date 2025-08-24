@@ -65,7 +65,7 @@ async function ensureDefaultConfigs() {
       mediaWindow: {
         visibilityMode: "auto",
       },
-      immersive_mode: "on",
+      default_immersive_mode: "on",
     },
   });
 
@@ -99,19 +99,30 @@ async function loadAllConfigs() {
 
 function broadcastToAll(getWindows, channel, payload) {
   const wins = (getWindows?.() || []).filter(Boolean);
-  wins.forEach((w) => {
+  console.log(`[ConfigWatcher] Broadcasting ${channel} to ${wins.length} windows`);
+  wins.forEach((w, index) => {
     try {
-      w.webContents.send(channel, payload);
-    } catch {}
+      if (w && w.webContents && !w.isDestroyed()) {
+        w.webContents.send(channel, payload);
+        console.log(`[ConfigWatcher] Successfully sent ${channel} to window ${index}`);
+      } else {
+        console.warn(`[ConfigWatcher] Window ${index} is not valid for broadcast`);
+      }
+    } catch (error) {
+      console.error(`[ConfigWatcher] Error broadcasting to window ${index}:`, error.message);
+    }
   });
 }
 
 // options: { onThemeChange?, onUiChange?, onCommandsChange? }
 async function setupConfigHotReload(getWindows, options = {}) {
+  console.log("[ConfigWatcher] Setting up config hot reload...");
   const configDir = await ensureDefaultConfigs();
+  console.log("[ConfigWatcher] Config directory:", configDir);
 
   // 初次載入並廣播
   const { theme, ui, commands } = await loadAllConfigs();
+  console.log("[ConfigWatcher] Initial configs loaded");
   broadcastToAll(getWindows, "theme:update", theme);
   broadcastToAll(getWindows, "ui:update", ui);
   broadcastToAll(getWindows, "commands:update", commands);
@@ -121,26 +132,73 @@ async function setupConfigHotReload(getWindows, options = {}) {
 
   // 監看變更
   const targets = ["theme.json", "ui.json", "commands.json"].map((f) => path.join(configDir, f));
-  const watcher = chokidar.watch(targets, { ignoreInitial: true });
+  console.log("[ConfigWatcher] Watching files:", targets);
+  
+  let watcher;
+  try {
+    watcher = chokidar.watch(targets, { 
+      ignoreInitial: true,
+      persistent: true,
+      usePolling: false,
+      awaitWriteFinish: {
+        stabilityThreshold: 100,
+        pollInterval: 100
+      }
+    });
+    console.log("[ConfigWatcher] Chokidar watcher created successfully");
+  } catch (error) {
+    console.error("[ConfigWatcher] Failed to create chokidar watcher:", error);
+    // Fallback to polling if chokidar fails
+    console.log("[ConfigWatcher] Attempting fallback to polling...");
+    try {
+      watcher = chokidar.watch(targets, { 
+        ignoreInitial: true,
+        persistent: true,
+        usePolling: true,
+        interval: 1000
+      });
+      console.log("[ConfigWatcher] Fallback polling watcher created");
+    } catch (fallbackError) {
+      console.error("[ConfigWatcher] Fallback watcher also failed:", fallbackError);
+      throw fallbackError;
+    }
+  }
 
   let timer;
   watcher.on("change", async (changedPath) => {
+    console.log("[ConfigWatcher] File change detected:", changedPath);
     clearTimeout(timer);
     timer = setTimeout(async () => {
+      console.log("[ConfigWatcher] Processing file change:", changedPath);
       const file = path.basename(changedPath);
       const data = await readJsonSafe(changedPath);
-      if (!data) return;
+      if (!data) {
+        console.warn("[ConfigWatcher] Failed to read JSON data from:", changedPath);
+        return;
+      }
+      console.log("[ConfigWatcher] Successfully read data for:", file);
       if (file === "theme.json") {
+        console.log("[ConfigWatcher] Broadcasting theme:update");
         broadcastToAll(getWindows, "theme:update", data);
         options.onThemeChange?.(data);
       } else if (file === "ui.json") {
+        console.log("[ConfigWatcher] Broadcasting ui:update");
         broadcastToAll(getWindows, "ui:update", data);
         options.onUiChange?.(data);
       } else if (file === "commands.json") {
+        console.log("[ConfigWatcher] Broadcasting commands:update");
         broadcastToAll(getWindows, "commands:update", data);
         options.onCommandsChange?.(data, changedPath);
       }
     }, 80);
+  });
+
+  watcher.on("error", (error) => {
+    console.error("[ConfigWatcher] Watcher error:", error);
+  });
+
+  watcher.on("ready", () => {
+    console.log("[ConfigWatcher] Watcher is ready and monitoring files");
   });
 
   return {
