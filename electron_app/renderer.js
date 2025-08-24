@@ -296,6 +296,45 @@
             if (res.data.isReconnect) {
               api.refreshAll();
             }
+            if (res.data.isMakeRecycleBinZero) {
+              // Refresh recycle bin status
+              api.refreshAll();
+            }
+            if (res.data.isAutoFocusOn !== undefined) {
+              autoFocus(res.data.isAutoFocusOn);
+            }
+            if (res.data.isClearOutput) {
+              // Clear terminal output
+              if (outputContainer) {
+                if (res.data.isFullClear) {
+                  outputContainer.innerHTML = "";
+                } else {
+                  // Clear all output except initial help messages
+                  const helpMessages = outputContainer.querySelectorAll("p.small");
+                  outputContainer.innerHTML = "";
+                  // Add back the first two help messages
+                  if (helpMessages.length >= 2) {
+                    outputContainer.appendChild(helpMessages[0].cloneNode(true));
+                    outputContainer.appendChild(helpMessages[1].cloneNode(true));
+                  }
+                }
+              }
+            }
+            if (res.data.isCopiedQuote) {
+              // Copy quote to clipboard
+              if (state.quote) {
+                try {
+                  const text = `"${state.quote.quote || ''}" - ${state.quote.author || ''}`;
+                  navigator.clipboard.writeText(text);
+                } catch (e) {
+                  console.debug("[EVE] Failed to copy quote to clipboard:", e);
+                }
+              }
+            }
+            if (res.data.isChangeQuote) {
+              // Refresh quote
+              api.refreshAll();
+            }
           }
         }
       } catch (e) {
@@ -365,20 +404,23 @@
   // ------------------------
   // Auto-focus functionality
   // ------------------------
+  let currentAutoFocusHandler = null;
+  
   function autoFocus(isAutoFocusOn) {
     const input = document.querySelector("[data-eve-console-input]") || document.querySelector("#terminalInput");
     if (!input) return;
     
-    const terminalInputBlurHandler = function () {
-      if (isAutoFocusOn) {
-        input.focus();
-      }
-    };
+    // Remove existing handler if any
+    if (currentAutoFocusHandler) {
+      input.removeEventListener("blur", currentAutoFocusHandler);
+      currentAutoFocusHandler = null;
+    }
     
     if (isAutoFocusOn) {
-      input.addEventListener("blur", terminalInputBlurHandler);
-    } else {
-      input.removeEventListener("blur", terminalInputBlurHandler);
+      currentAutoFocusHandler = function () {
+        input.focus();
+      };
+      input.addEventListener("blur", currentAutoFocusHandler);
     }
   }
 
