@@ -3,7 +3,7 @@
     "scale": 1,
     "alwaysOnTop": true,
     "nodeIntegration": true,
-    "contextIsolation": false,
+    "contextIsolation": true,
     "mediaWindow": {
       "visibilityMode": "auto"
     },
