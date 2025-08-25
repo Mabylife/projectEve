@@ -466,30 +466,46 @@ app.whenReady().then(async () => {
   // Apply initial scale from loaded config
   const initialUiConfig = configManager.getConfig('ui');
   if (initialUiConfig?.ui?.scale && scaleMgr) {
-    writeLog("CFG", `Applying initial scale: ${initialUiConfig.ui.scale}`);
-    // Wait for windows to be ready for base bounds capture
-    Promise.all([
-      new Promise(resolve => {
-        if (mainWin) {
-          mainWin.once('ready-to-show', resolve);
-        } else {
-          resolve();
-        }
-      }),
-      new Promise(resolve => {
-        if (mediaWin) {
-          mediaWin.once('ready-to-show', resolve);
-        } else {
-          resolve();
-        }
-      })
-    ]).then(() => {
-      setTimeout(() => {
+    writeLog("CFG", `Will apply initial scale: ${initialUiConfig.ui.scale}`);
+    
+    // Apply scale once both windows have finished loading their content
+    let mainReady = false;
+    let mediaReady = false;
+    
+    const checkAndApplyScale = () => {
+      if (mainReady && mediaReady) {
         scaleMgr.captureBaseBounds();
         scaleMgr.setScale(initialUiConfig.ui.scale);
         writeLog("CFG", `Initial scale applied: ${initialUiConfig.ui.scale}`);
-      }, 50);
-    });
+      }
+    };
+    
+    if (mainWin) {
+      mainWin.webContents.once('did-finish-load', () => {
+        mainReady = true;
+        checkAndApplyScale();
+      });
+    } else {
+      mainReady = true;
+    }
+    
+    if (mediaWin) {
+      mediaWin.webContents.once('did-finish-load', () => {
+        mediaReady = true;
+        checkAndApplyScale();
+      });
+    } else {
+      mediaReady = true;
+    }
+    
+    // Fallback: apply after a timeout even if events don't fire
+    setTimeout(() => {
+      if (!mainReady || !mediaReady) {
+        writeLog("CFG", "Applying initial scale via fallback timeout");
+        scaleMgr.captureBaseBounds();
+        scaleMgr.setScale(initialUiConfig.ui.scale);
+      }
+    }, 2000);
   }
 
   // 啟動 WS 橋接：Python → WS → main → IPC → UI
