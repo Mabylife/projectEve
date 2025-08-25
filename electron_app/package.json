@@ -4,16 +4,20 @@
   "description": "Project Eve - Life quality terminal",
   "author": "Mabylife",
   "license": "MIT",
-  "main": "main.js",
   "private": true,
+  "main": "main.js",
   "scripts": {
-    "dev": "electron .",
-    "start": "electron .",
+    "dev": "electron . --no-sandbox --disable-dev-shm-usage",
+    "start": "electron . --no-sandbox --disable-dev-shm-usage",
     "build": "electron-builder --win portable"
   },
   "dependencies": {
     "child-process": "^1.0.2",
-    "mica-electron": "^1.5.16"
+    "chokidar": "^4.0.3",
+    "fs": "^0.0.1-security",
+    "mica-electron": "^1.5.16",
+    "promises": "^0.2.5",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",

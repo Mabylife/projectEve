@@ -1,14 +1,25 @@
+:root {
+  --background-color: 0, 0, 0;
+  --background-opacity: 0.25;
+  --backdrop-blur: 20px;
+  --text-color: 255, 255, 255;
+  --main-text-opacity: 1;
+  --secondary-text-opacity: 0.5;
+  --base-font-size: 16px;
+  font-size: var(--base-font-size);
+}
+
 .LG {
   /* border-radius: 34px; */
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(20px);
+  background: rgba(var(--background-color), var(--background-opacity));
+  backdrop-filter: blur(var(--backdrop-blur));
 }
 
 .small,
 small {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(var(--text-color), var(--secondary-text-opacity));
   font-family: "Space Mono";
-  font-size: 20px;
+  font-size: 1.25rem; /* 20px at 16px base */
   font-style: normal;
   font-weight: 400;
   line-height: normal;
@@ -16,18 +27,18 @@ small {
 
 .normal,
 p {
-  color: #fff;
+  color: rgba(var(--text-color), var(--main-text-opacity));
   font-family: "Space Mono";
-  font-size: 20px;
+  font-size: 1.25rem; /* 20px at 16px base */
   font-style: normal;
   font-weight: 400;
   line-height: normal;
 }
 
 .quote {
-  color: #fff;
+  color: rgba(var(--text-color), var(--main-text-opacity));
   font-family: "Space Mono";
-  font-size: 24px;
+  font-size: 1.5rem; /* 24px at 16px base */
   font-style: normal;
   font-weight: 400;
   line-height: normal;
