@@ -15,6 +15,7 @@ class ConfigManager {
     this.listeners = new Map();
     this.isInitialized = false;
     this.getWindows = null;
+    this.fileChangeTimeouts = new Map(); // For debouncing file changes
   }
 
   // Get config directory path
@@ -162,23 +163,30 @@ class ConfigManager {
     if (options.onUiChange) this.on("ui:change", options.onUiChange);
     if (options.onCommandsChange) this.on("commands:change", options.onCommandsChange);
 
-    // Broadcast initial configs to all windows
-    this.broadcastToAllWindows("theme:update", this.configs.theme);
-    this.broadcastToAllWindows("ui:update", this.configs.ui);
-    this.broadcastToAllWindows("commands:update", this.configs.commands);
-
-    // Trigger initial callbacks
+    // Trigger initial callbacks for main process
     this.emit("theme:change", this.configs.theme);
     this.emit("ui:change", this.configs.ui);
     this.emit("commands:change", this.configs.commands);
 
-    // Start watching for changes (only after initial load)
+    // Start watching for changes
     await this.startWatching();
 
     this.isInitialized = true;
     console.log("[ConfigManager] Initialization complete");
 
     return this;
+  }
+
+  // Send initial configs to windows once they're ready
+  async sendInitialConfigsToWindows() {
+    console.log("[ConfigManager] Sending initial configs to windows...");
+    
+    // Broadcast initial configs to all windows
+    this.broadcastToAllWindows("theme:update", this.configs.theme);
+    this.broadcastToAllWindows("ui:update", this.configs.ui);
+    this.broadcastToAllWindows("commands:update", this.configs.commands);
+    
+    console.log("[ConfigManager] Initial configs sent to windows");
   }
 
   // Start file watching for hot reload
@@ -206,7 +214,18 @@ class ConfigManager {
 
         watcher.on("change", async () => {
           console.log(`[ConfigManager] Detected change in ${fileName}`);
-          await this.handleFileChange(fileName, filePath);
+          
+          // Debounce file changes to handle editors that write multiple times
+          if (this.fileChangeTimeouts.has(fileName)) {
+            clearTimeout(this.fileChangeTimeouts.get(fileName));
+          }
+          
+          const timeout = setTimeout(async () => {
+            this.fileChangeTimeouts.delete(fileName);
+            await this.handleFileChange(fileName, filePath);
+          }, 200); // 200ms debounce
+          
+          this.fileChangeTimeouts.set(fileName, timeout);
         });
 
         watcher.on("error", (error) => {
@@ -307,6 +326,13 @@ class ConfigManager {
   // Clean up
   destroy() {
     console.log("[ConfigManager] Cleaning up...");
+
+    // Clear any pending file change timeouts
+    for (const [fileName, timeout] of this.fileChangeTimeouts) {
+      clearTimeout(timeout);
+      console.log(`[ConfigManager] Cleared pending timeout for ${fileName}`);
+    }
+    this.fileChangeTimeouts.clear();
 
     for (const [fileName, watcher] of this.watchers) {
       try {

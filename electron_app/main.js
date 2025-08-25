@@ -312,6 +312,15 @@ function createWindowsIfNeeded() {
   if (fs.existsSync(primaryHtml)) mainWin.loadFile(primaryHtml);
   else writeLog("WIN", "缺少 primary.html: " + primaryHtml);
 
+  // Listen for main window ready
+  mainWin.webContents.once('did-finish-load', () => {
+    writeLog("WIN", "主視窗內容載入完成");
+    // Send initial configs after window is ready
+    if (configManager.isInitialized) {
+      setTimeout(() => configManager.sendInitialConfigsToWindows(), 100);
+    }
+  });
+
   mediaWin = new MicaBrowserWindow({
     width: 300,
     height: 511,
@@ -339,6 +348,11 @@ function createWindowsIfNeeded() {
   const mediaHtml = resourcePath("./pages/mediaCard.html");
   if (fs.existsSync(mediaHtml)) mediaWin.loadFile(mediaHtml);
   else writeLog("WIN", "缺少 mediaCard.html: " + mediaHtml);
+
+  // Listen for media window ready
+  mediaWin.webContents.once('did-finish-load', () => {
+    writeLog("WIN", "媒體視窗內容載入完成");
+  });
 
   mainWin.on("close", (e) => {
     if (!app.isQuiting) {
