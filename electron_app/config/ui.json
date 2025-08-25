@@ -1,6 +1,6 @@
 {
   "ui": {
-    "scale": 1,
+    "scale": 1.2,
     "alwaysOnTop": true,
     "mediaWindow": {
       "visibilityMode": "auto"
