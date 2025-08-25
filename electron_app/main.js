@@ -279,6 +279,10 @@ function createWindowsIfNeeded() {
     return;
   }
 
+  // Get alwaysOnTop setting from UI config
+  const uiConfig = configManager.getConfig('ui');
+  const alwaysOnTop = uiConfig?.ui?.alwaysOnTop !== false; // Default to true if not specified
+
   mainWin = new MicaBrowserWindow({
     width: 1200,
     height: 700,
@@ -287,7 +291,7 @@ function createWindowsIfNeeded() {
     transparent: true,
     skipTaskbar: true,
     focusable: true,
-    alwaysOnTop: true,
+    alwaysOnTop: alwaysOnTop,
     show: false,
     webPreferences: {
       nodeIntegration: true,
@@ -316,7 +320,7 @@ function createWindowsIfNeeded() {
     transparent: true,
     skipTaskbar: true,
     focusable: false,
-    alwaysOnTop: true,
+    alwaysOnTop: alwaysOnTop,
     show: false,
     webPreferences: {
       nodeIntegration: true,
@@ -429,6 +433,18 @@ app.whenReady().then(async () => {
         writeLog("CFG", `Applying scale change: ${newScale}`);
         scaleMgr.setScale(newScale);
       }
+      
+      // Handle alwaysOnTop changes
+      if (ui?.ui?.alwaysOnTop !== undefined) {
+        const alwaysOnTop = ui.ui.alwaysOnTop;
+        writeLog("CFG", `Applying alwaysOnTop change: ${alwaysOnTop}`);
+        if (mainWin && !mainWin.isDestroyed()) {
+          mainWin.setAlwaysOnTop(alwaysOnTop);
+        }
+        if (mediaWin && !mediaWin.isDestroyed()) {
+          mediaWin.setAlwaysOnTop(alwaysOnTop);
+        }
+      }
     },
     onCommandsChange: async (commandsObj, filePath) => {
       // 驗證 commands 基本格式
@@ -450,8 +466,46 @@ app.whenReady().then(async () => {
   // Apply initial scale from loaded config
   const initialUiConfig = configManager.getConfig('ui');
   if (initialUiConfig?.ui?.scale && scaleMgr) {
-    writeLog("CFG", `Applying initial scale: ${initialUiConfig.ui.scale}`);
-    scaleMgr.setScale(initialUiConfig.ui.scale);
+    writeLog("CFG", `Will apply initial scale: ${initialUiConfig.ui.scale}`);
+    
+    // Apply scale once both windows have finished loading their content
+    let mainReady = false;
+    let mediaReady = false;
+    
+    const checkAndApplyScale = () => {
+      if (mainReady && mediaReady) {
+        scaleMgr.captureBaseBounds();
+        scaleMgr.setScale(initialUiConfig.ui.scale);
+        writeLog("CFG", `Initial scale applied: ${initialUiConfig.ui.scale}`);
+      }
+    };
+    
+    if (mainWin) {
+      mainWin.webContents.once('did-finish-load', () => {
+        mainReady = true;
+        checkAndApplyScale();
+      });
+    } else {
+      mainReady = true;
+    }
+    
+    if (mediaWin) {
+      mediaWin.webContents.once('did-finish-load', () => {
+        mediaReady = true;
+        checkAndApplyScale();
+      });
+    } else {
+      mediaReady = true;
+    }
+    
+    // Fallback: apply after a timeout even if events don't fire
+    setTimeout(() => {
+      if (!mainReady || !mediaReady) {
+        writeLog("CFG", "Applying initial scale via fallback timeout");
+        scaleMgr.captureBaseBounds();
+        scaleMgr.setScale(initialUiConfig.ui.scale);
+      }
+    }, 2000);
   }
 
   // 啟動 WS 橋接：Python → WS → main → IPC → UI
