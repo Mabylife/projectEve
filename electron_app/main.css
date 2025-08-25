@@ -178,3 +178,11 @@
 .upperPart.immOn .imm > div > .rightPart > .progress-bar {
   width: 270px;
 }
+
+.upperPart.immOn > section.daily_quote {
+  display: none;
+}
+
+.upperPart.immOff > section.imm {
+  display: none;
+}

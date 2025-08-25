@@ -84,7 +84,7 @@
     root.style.setProperty("--main-text-opacity", String(mainOpacity));
     root.style.setProperty("--secondary-text-opacity", String(secondaryOpacity));
     root.style.setProperty("--backdrop-blur", `${blurPx}px`);
-    
+
     // Store base font size for UI scaling to use
     root.style.setProperty("--base-font-size", `${baseFontSizePx}px`);
 
@@ -92,7 +92,7 @@
     if (fontFamily) {
       document.body.style.fontFamily = fontFamily;
     }
-    
+
     // Apply the current scale to the new base font size
     applyFontScale();
   }
@@ -101,7 +101,7 @@
     const scale = state.ui?.ui?.scale ?? 1;
     const baseSize = state.theme?.theme?.baseFontSizePx ?? 16;
     const finalSize = baseSize * scale;
-    
+
     console.log("[EVE][SCALE] Applying font scale - base:", baseSize, "scale:", scale, "final:", finalSize);
     document.documentElement.style.fontSize = `${finalSize}px`;
   }
@@ -458,35 +458,12 @@
 
     // 切換 upperPart 的 class
     const upperPart = document.querySelector(".upperPart");
-    const alphaSection = document.querySelector(".alphaSection");
 
-    if (upperPart && alphaSection) {
+    if (upperPart) {
       if (state.isImmOn) {
         // 進入 immersive 模式
         upperPart.classList.remove("immOff");
         upperPart.classList.add("immOn");
-        alphaSection.classList.remove("daily_quote");
-
-        // 保存原始內容
-        if (!alphaSection.dataset.originalContent) {
-          alphaSection.dataset.originalContent = alphaSection.innerHTML;
-        }
-
-        // 替換為 immersive 媒體內容
-        alphaSection.innerHTML = `
-          <div class="imm">
-            <small class="fetch-status">/ media</small>
-            <div>
-              <img class="song-thumbnail" src="assets/defaultThumbnail.svg" alt="" data-eve-media-thumb />
-              <div class="rightPart">
-                <div><span class="small">Song</span><span class="normal song-title" data-eve-media-title>--</span></div>
-                <div><span class="small">Author</span><span class="normal song-author" data-eve-media-author>--</span></div>
-                <div><span class="small">Time</span><span class="normal song-time" data-eve-media-time>--</span></div>
-                <p class="normal progress-bar">[--------------------]</p>
-              </div>
-            </div>
-          </div>
-        `;
 
         // 重新綁定媒體數據到新的 DOM 元素
         updateMediaUI();
@@ -494,12 +471,6 @@
         // 退出 immersive 模式
         upperPart.classList.remove("immOn");
         upperPart.classList.add("immOff");
-        alphaSection.classList.add("daily_quote");
-
-        // 恢復原始內容
-        if (alphaSection.dataset.originalContent) {
-          alphaSection.innerHTML = alphaSection.dataset.originalContent;
-        }
       }
     }
 
