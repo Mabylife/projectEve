@@ -55,10 +55,6 @@
     const a = Array.isArray(arr) && arr.length >= 3 ? arr : fallback;
     return `${a[0] | 0}, ${a[1] | 0}, ${a[2] | 0}`;
   }
-  function arrToRgba(arr, alpha = 1, fallback = [0, 0, 0]) {
-    const a = Array.isArray(arr) && arr.length >= 3 ? arr : fallback;
-    return `rgba(${a[0] | 0}, ${a[1] | 0}, ${a[2] | 0}, ${Number(alpha)})`;
-  }
 
   function applyTheme(themeObj) {
     console.log("[EVE][THEME] Applying theme:", themeObj);
