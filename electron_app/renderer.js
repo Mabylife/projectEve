@@ -53,7 +53,7 @@
   // ------------------------
   function arrToRgb(arr, fallback = [255, 255, 255]) {
     const a = Array.isArray(arr) && arr.length >= 3 ? arr : fallback;
-    return `rgb(${a[0] | 0}, ${a[1] | 0}, ${a[2] | 0})`;
+    return `${a[0] | 0}, ${a[1] | 0}, ${a[2] | 0}`;
   }
   function arrToRgba(arr, alpha = 1, fallback = [0, 0, 0]) {
     const a = Array.isArray(arr) && arr.length >= 3 ? arr : fallback;
@@ -84,12 +84,26 @@
     root.style.setProperty("--main-text-opacity", String(mainOpacity));
     root.style.setProperty("--secondary-text-opacity", String(secondaryOpacity));
     root.style.setProperty("--backdrop-blur", `${blurPx}px`);
-    root.style.fontSize = `${baseFontSizePx}px`;
+    
+    // Store base font size for UI scaling to use
+    root.style.setProperty("--base-font-size", `${baseFontSizePx}px`);
 
     // Apply font family to body for broader coverage
     if (fontFamily) {
       document.body.style.fontFamily = fontFamily;
     }
+    
+    // Apply the current scale to the new base font size
+    applyFontScale();
+  }
+
+  function applyFontScale() {
+    const scale = state.ui?.ui?.scale ?? 1;
+    const baseSize = state.theme?.theme?.baseFontSizePx ?? 16;
+    const finalSize = baseSize * scale;
+    
+    console.log("[EVE][SCALE] Applying font scale - base:", baseSize, "scale:", scale, "final:", finalSize);
+    document.documentElement.style.fontSize = `${finalSize}px`;
   }
 
   function applyUiConfig(uiObj) {
@@ -97,11 +111,8 @@
     state.ui = uiObj || {};
     const u = state.ui?.ui || {};
 
-    const scale = u.scale ?? 1;
-    const baseSize = state.theme?.theme?.baseFontSizePx ?? 16;
-    const newFontSize = `${baseSize * scale}px`;
-    console.log("[EVE][UI] Setting font size to:", newFontSize, "(base:", baseSize, "scale:", scale, ")");
-    document.documentElement.style.setProperty("--eve-font-size", newFontSize);
+    // Apply font scaling
+    applyFontScale();
 
     if (typeof u.default_immersive_mode === "string" && isInitialLoad) {
       const v = u.default_immersive_mode.toLowerCase();
