@@ -33,6 +33,7 @@
     media: {
       status: "stopped",
       title: null,
+      author: null,
       statusName: null,
       thumbnail: null,
       duration: null,
@@ -44,19 +45,19 @@
     isImmOn: false,
   };
 
+  // Track if this is the initial application load
+  let isInitialLoad = true;
+
   // ------------------------
   // 主題 / UI 設定套用
   // ------------------------
   function arrToRgb(arr, fallback = [255, 255, 255]) {
     const a = Array.isArray(arr) && arr.length >= 3 ? arr : fallback;
-    return `rgb(${a[0] | 0}, ${a[1] | 0}, ${a[2] | 0})`;
-  }
-  function arrToRgba(arr, alpha = 1, fallback = [0, 0, 0]) {
-    const a = Array.isArray(arr) && arr.length >= 3 ? arr : fallback;
-    return `rgba(${a[0] | 0}, ${a[1] | 0}, ${a[2] | 0}, ${Number(alpha)})`;
+    return `${a[0] | 0}, ${a[1] | 0}, ${a[2] | 0}`;
   }
 
   function applyTheme(themeObj) {
+    console.log("[EVE][THEME] Applying theme:", themeObj);
     state.theme = themeObj || {};
     const t = state.theme?.theme || {};
 
@@ -67,32 +68,58 @@
     const secondaryOpacity = t.secondaryTextOpacity ?? 0.5;
     const baseFontSizePx = t.baseFontSizePx ?? 16;
     const blurPx = t.backdropBlurPx ?? 20;
+    const fontFamily = t.fontFamily || "Space Mono";
+
+    console.log("[EVE][THEME] Setting CSS variables - bg:", bgRGB, "opacity:", bgOpacity, "fontSize:", baseFontSizePx, "fontFamily:", fontFamily);
 
     const root = document.documentElement;
-    root.style.setProperty("--eve-bg-rgb", arrToRgb(bgRGB));
-    root.style.setProperty("--eve-bg-rgba", arrToRgba(bgRGB, bgOpacity));
-    root.style.setProperty("--eve-text-rgb", arrToRgb(textRGB));
-    root.style.setProperty("--eve-text-main-opacity", String(mainOpacity));
-    root.style.setProperty("--eve-text-secondary-opacity", String(secondaryOpacity));
-    root.style.setProperty("--eve-font-size", `${baseFontSizePx}px`);
-    root.style.setProperty("--eve-backdrop-blur", `${blurPx}px`);
+    // Use CSS variable names that match component.css
+    root.style.setProperty("--background-color", arrToRgb(bgRGB));
+    root.style.setProperty("--background-opacity", String(bgOpacity));
+    root.style.setProperty("--text-color", arrToRgb(textRGB));
+    root.style.setProperty("--main-text-opacity", String(mainOpacity));
+    root.style.setProperty("--secondary-text-opacity", String(secondaryOpacity));
+    root.style.setProperty("--backdrop-blur", `${blurPx}px`);
 
-    document.body.style.color = arrToRgb(textRGB);
+    // Store base font size for UI scaling to use
+    root.style.setProperty("--base-font-size", `${baseFontSizePx}px`);
+
+    // Apply font family to body for broader coverage
+    if (fontFamily) {
+      document.body.style.fontFamily = fontFamily;
+    }
+
+    // Apply the current scale to the new base font size
+    applyFontScale();
+  }
+
+  function applyFontScale() {
+    const scale = state.ui?.ui?.scale ?? 1;
+    const baseSize = state.theme?.theme?.baseFontSizePx ?? 16;
+    const finalSize = baseSize * scale;
+
+    console.log("[EVE][SCALE] Applying font scale - base:", baseSize, "scale:", scale, "final:", finalSize);
+    document.documentElement.style.fontSize = `${finalSize}px`;
   }
 
   function applyUiConfig(uiObj) {
+    console.log("[EVE][UI] Applying UI config:", uiObj);
     state.ui = uiObj || {};
     const u = state.ui?.ui || {};
 
-    const scale = u.scale ?? 1;
-    const baseSize = state.theme?.theme?.baseFontSizePx ?? 16;
-    document.documentElement.style.setProperty("--eve-font-size", `${baseSize * scale}px`);
+    // Apply font scaling
+    applyFontScale();
 
-    if (typeof u.immersive_mode === "string") {
-      const v = u.immersive_mode.toLowerCase();
-      state.isImmOn = v === "on";
+    if (typeof u.default_immersive_mode === "string" && isInitialLoad) {
+      const v = u.default_immersive_mode.toLowerCase();
+      const shouldBeImmersive = v === "on";
+      console.log("[EVE][UI] Setting initial immersive mode to:", shouldBeImmersive);
+      setImmersive(shouldBeImmersive);
       reflectMediaToMain();
     }
+
+    // After initial load, prevent default immersive mode from being applied again
+    isInitialLoad = false;
   }
 
   // ------------------------
@@ -111,6 +138,7 @@
     if (!first) return;
 
     state.media.title = first.title || null;
+    state.media.author = first.artist || null; // Extract artist field as author
     state.media.status = normalizeMediaStatus(first.state);
     state.media.thumbnail = first.thumbnail || null;
     state.media.duration = first.duration ?? null;
@@ -135,6 +163,7 @@
       }
       const meta = pkt.meta || {};
       if (typeof meta.title !== "undefined") state.media.title = meta.title;
+      if (typeof meta.artist !== "undefined") state.media.author = meta.artist;
       if (typeof meta.statusName !== "undefined") state.media.statusName = meta.statusName;
       updateMediaUI();
       reflectMediaToMain();
@@ -142,22 +171,50 @@
   }
 
   function reflectMediaToMain() {
-    try {
-      api.setMediaAndImmersive({
-        mediaStatus: state.media.status,
-        isImmOn: state.isImmOn,
-      });
-    } catch {}
+    api.setMediaAndImmersive({
+      mediaStatus: state.media.status,
+      isImmOn: state.isImmOn,
+    });
   }
 
   // ------------------------
   // UI 更新（綁定到實際 DOM）
   // ------------------------
   function updateMediaUI() {
+    let displayTime = `${state.media.position || "--"} / ${state.media.duration || "--"}`;
     setText(document.querySelector("[data-eve-media-title]"), state.media.title || "");
     setText(document.querySelector("[data-eve-media-status]"), state.media.status || "");
-    setImg(document.querySelector("[data-eve-media-thumb]"), state.media.thumbnail || "");
+    setImg(document.querySelector("[data-eve-media-thumb]"), state.media.thumbnail || "../assets/defaultThumbnail.svg");
+    setText(document.querySelector("[data-eve-media-author]"), state.media.author || "");
+    setText(document.querySelector("[data-eve-media-time]"), displayTime || "");
+
+    // 更新進度條 (僅在 immersive 模式)
+    const progressBar = document.querySelector(".progress-bar");
+    if (progressBar && state.isImmOn) {
+      const progress = renderProgressBar(state.media.position, state.media.duration);
+      setText(progressBar, progress);
+    }
+
     setAttr(document.body, "data-media-status", state.media.status);
+    // Also update the music playing status in the status section
+    updateMusicPlayingUI();
+  }
+
+  function renderProgressBar(position, duration, totalBars = 20) {
+    if (typeof position !== "number" || typeof duration !== "number" || duration === 0) {
+      return "[--------------------]";
+    }
+    const progress = Math.floor((position / duration) * totalBars);
+    let bar = "[";
+    for (let i = 0; i < totalBars; i++) {
+      if (i === progress) {
+        bar += "O";
+      } else {
+        bar += "-";
+      }
+    }
+    bar += "]";
+    return bar;
   }
 
   function updateDiskUI() {
@@ -169,13 +226,44 @@
 
   function updateRecycleUI() {
     const mb = state.recyclebin?.recyclebinMB ?? 0;
-    setText(document.querySelector("[data-eve-recycle-mb]"), String(mb));
+    setText(document.querySelector("[data-eve-recycle-mb]"), `${mb} MB`);
   }
 
   function updateQuoteUI() {
     const q = state.quote || {};
     setText(document.querySelector("[data-eve-quote-text]"), q.quote || "");
     setText(document.querySelector("[data-eve-quote-author]"), q.author || "");
+  }
+
+  // New: Date/Time updates (should be local, not from server)
+  function updateDateTime() {
+    const now = new Date();
+    const weekday = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const dateStr = `${now.getMonth() + 1}/${now.getDate()} ${weekday[now.getDay()]}`;
+
+    let hour = now.getHours();
+    let min = now.getMinutes();
+    let ampm = hour >= 12 ? "PM" : "AM";
+    hour %= 12;
+    if (hour === 0) {
+      hour = 12;
+    }
+    min = min < 10 ? "0" + min : min;
+    const timeStr = `${hour}:${min} ${ampm}`;
+
+    setText(document.querySelector("#date"), dateStr);
+    setText(document.querySelector("#time"), timeStr);
+  }
+
+  // New: Power mode updates
+  function updatePowerModeUI(mode) {
+    setText(document.querySelector("#power-mode"), mode || "silent");
+  }
+
+  // New: Media playing status updates
+  function updateMusicPlayingUI() {
+    const status = state.media.status || "stopped";
+    setText(document.querySelector("#music-playing"), status);
   }
 
   // ------------------------
@@ -235,8 +323,89 @@
       try {
         const res = await api.runTerminal(inputText);
         console.debug("[EVE][terminal] result:", res);
+
+        // Add terminal output to UI
+        if (res && res.ok && res.data) {
+          const outputContainer = document.querySelector("#terminalOutput") || document.querySelector("[data-eve-console-output]");
+          if (outputContainer && res.data.output) {
+            res.data.output.forEach((line) => {
+              const p = document.createElement("p");
+              p.className = "small";
+              p.textContent = line;
+              if (res.data.success === false) {
+                p.style.color = "red";
+              }
+              outputContainer.appendChild(p);
+            });
+
+            // Scroll to bottom
+            outputContainer.scrollTop = outputContainer.scrollHeight;
+
+            // Handle special actions from terminal commands
+            if (res.data.isChangePowerMode) {
+              updatePowerModeUI(res.data.mode);
+            }
+            if (res.data.isToggleImmMode) {
+              setImmersive(!state.isImmOn);
+            }
+            if (res.data.isReconnect) {
+              api.refreshAll();
+            }
+            if (res.data.isMakeRecycleBinZero) {
+              // Refresh recycle bin status
+              api.refreshAll();
+            }
+            if (res.data.isAutoFocusOn !== undefined) {
+              autoFocus(res.data.isAutoFocusOn);
+            }
+            if (res.data.isClearOutput) {
+              // Clear terminal output
+              if (outputContainer) {
+                if (res.data.isFullClear) {
+                  outputContainer.innerHTML = "";
+                } else {
+                  // Clear all output except initial help messages
+                  const helpMessages = outputContainer.querySelectorAll("p.small");
+                  outputContainer.innerHTML = "";
+                  // Add back the first two help messages
+                  if (helpMessages.length >= 2) {
+                    outputContainer.appendChild(helpMessages[0].cloneNode(true));
+                    outputContainer.appendChild(helpMessages[1].cloneNode(true));
+                  }
+                }
+              }
+            }
+            if (res.data.isCopiedQuote) {
+              // Copy quote to clipboard
+              if (state.quote) {
+                try {
+                  const text = `"${state.quote.quote || ""}" - ${state.quote.author || ""}`;
+                  navigator.clipboard.writeText(text);
+                } catch (e) {
+                  console.debug("[EVE] Failed to copy quote to clipboard:", e);
+                }
+              }
+            }
+            if (res.data.isChangeQuote) {
+              // Refresh quote
+              api.refreshAll();
+            }
+          }
+        }
       } catch (e) {
         console.error("[EVE][terminal] error:", e);
+
+        // Show error in terminal output
+        const outputContainer = document.querySelector("#terminalOutput") || document.querySelector("[data-eve-console-output]");
+        if (outputContainer) {
+          const p = document.createElement("p");
+          p.className = "small";
+          p.style.color = "red";
+          p.style.opacity = "0.5";
+          p.textContent = "Terminal error: " + (e.message || e);
+          outputContainer.appendChild(p);
+          outputContainer.scrollTop = outputContainer.scrollHeight;
+        }
       }
     }
 
@@ -244,16 +413,22 @@
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           const text = input.value.trim();
-          if (text) runTerminal(text);
+          if (text) {
+            runTerminal(text);
+          }
           input.value = "";
+          input.focus();
         }
       });
     }
     if (runBtn && input) {
       runBtn.addEventListener("click", () => {
         const text = input.value.trim();
-        if (text) runTerminal(text);
+        if (text) {
+          runTerminal(text);
+        }
         input.value = "";
+        input.focus();
       });
     }
 
@@ -276,9 +451,51 @@
   function setImmersive(on) {
     state.isImmOn = !!on;
     setAttr(document.body, "data-immersive", String(state.isImmOn));
+
+    // 切換 upperPart 的 class
+    const upperPart = document.querySelector(".upperPart");
+
+    if (upperPart) {
+      if (state.isImmOn) {
+        // 進入 immersive 模式
+        upperPart.classList.remove("immOff");
+        upperPart.classList.add("immOn");
+
+        // 重新綁定媒體數據到新的 DOM 元素
+        updateMediaUI();
+      } else {
+        // 退出 immersive 模式
+        upperPart.classList.remove("immOn");
+        upperPart.classList.add("immOff");
+      }
+    }
+
     try {
       api.setMediaAndImmersive({ mediaStatus: state.media.status, isImmOn: state.isImmOn });
     } catch {}
+  }
+
+  // ------------------------
+  // Auto-focus functionality
+  // ------------------------
+  let currentAutoFocusHandler = null;
+
+  function autoFocus(isAutoFocusOn) {
+    const input = document.querySelector("[data-eve-console-input]") || document.querySelector("#terminalInput");
+    if (!input) return;
+
+    // Remove existing handler if any
+    if (currentAutoFocusHandler) {
+      input.removeEventListener("blur", currentAutoFocusHandler);
+      currentAutoFocusHandler = null;
+    }
+
+    if (isAutoFocusOn) {
+      currentAutoFocusHandler = function () {
+        input.focus();
+      };
+      input.addEventListener("blur", currentAutoFocusHandler);
+    }
   }
 
   // 對外
@@ -291,6 +508,14 @@
   document.addEventListener("DOMContentLoaded", () => {
     bindIpc();
     bindDomEvents();
+
+    // Start auto-focus for terminal input
+    autoFocus(true);
+
+    // Start date/time updates every second
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+
     // 要求 Main 立刻拉一次所有非即時資料（Main 收到後會 broadcast）
     api.refreshAll();
     console.debug("[EVE] Renderer started. Waiting IPC updates from Main...");

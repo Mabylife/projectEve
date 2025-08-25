@@ -2,11 +2,9 @@
   "ui": {
     "scale": 1,
     "alwaysOnTop": true,
-    "nodeIntegration": true,
-    "contextIsolation": false,
     "mediaWindow": {
-      "visibilityMode": "auto"
+      "visibilityMode": "auto" 
     },
-    "immersive_mode": "off"
+    "default_immersive_mode": "off"
   }
 }

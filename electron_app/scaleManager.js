@@ -25,8 +25,44 @@ function applyZoomAndResize(scale) {
   if (!mainWin && !mediaWin) return;
 
   // 整頁縮放：包含所有 px 元素、圖片、間距
-  if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.setZoomFactor(scale);
-  if (mediaWin && !mediaWin.isDestroyed()) mediaWin.webContents.setZoomFactor(scale);
+  if (mainWin && !mainWin.isDestroyed()) {
+    const applyMainZoom = () => {
+      try {
+        if (mainWin.webContents && mainWin.webContents.isLoading()) {
+          // Wait for content to finish loading
+          mainWin.webContents.once('did-finish-load', () => {
+            mainWin.webContents.setZoomFactor(scale);
+            console.log(`[ScaleManager] Applied delayed zoom factor ${scale} to main window`);
+          });
+        } else {
+          mainWin.webContents.setZoomFactor(scale);
+          console.log(`[ScaleManager] Applied zoom factor ${scale} to main window`);
+        }
+      } catch (e) {
+        console.error(`[ScaleManager] Failed to set zoom factor for main window:`, e.message);
+      }
+    };
+    applyMainZoom();
+  }
+  if (mediaWin && !mediaWin.isDestroyed()) {
+    const applyMediaZoom = () => {
+      try {
+        if (mediaWin.webContents && mediaWin.webContents.isLoading()) {
+          // Wait for content to finish loading
+          mediaWin.webContents.once('did-finish-load', () => {
+            mediaWin.webContents.setZoomFactor(scale);
+            console.log(`[ScaleManager] Applied delayed zoom factor ${scale} to media window`);
+          });
+        } else {
+          mediaWin.webContents.setZoomFactor(scale);
+          console.log(`[ScaleManager] Applied zoom factor ${scale} to media window`);
+        }
+      } catch (e) {
+        console.error(`[ScaleManager] Failed to set zoom factor for media window:`, e.message);
+      }
+    };
+    applyMediaZoom();
+  }
 
   // 確保已抓到基準尺寸
   captureBaseBounds();

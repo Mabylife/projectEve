@@ -5,7 +5,8 @@
   --text-color: 255, 255, 255;
   --main-text-opacity: 1;
   --secondary-text-opacity: 0.5;
-  font-size: 16px;
+  --base-font-size: 16px;
+  font-size: var(--base-font-size);
 }
 
 .LG {
@@ -18,7 +19,7 @@
 small {
   color: rgba(var(--text-color), var(--secondary-text-opacity));
   font-family: "Space Mono";
-  font-size: 20px;
+  font-size: 1.25rem; /* 20px at 16px base */
   font-style: normal;
   font-weight: 400;
   line-height: normal;
@@ -28,7 +29,7 @@ small {
 p {
   color: rgba(var(--text-color), var(--main-text-opacity));
   font-family: "Space Mono";
-  font-size: 20px;
+  font-size: 1.25rem; /* 20px at 16px base */
   font-style: normal;
   font-weight: 400;
   line-height: normal;
@@ -37,7 +38,7 @@ p {
 .quote {
   color: rgba(var(--text-color), var(--main-text-opacity));
   font-family: "Space Mono";
-  font-size: 24px;
+  font-size: 1.5rem; /* 24px at 16px base */
   font-style: normal;
   font-weight: 400;
   line-height: normal;

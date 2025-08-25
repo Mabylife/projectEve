@@ -5,7 +5,7 @@
 //
 // 若需重新啟動 JS server，可在 restartServices 中加入自定 reload 邏輯 (目前僅重啟 Python)
 
-const { setupConfigHotReload } = require("./configWatcher");
+const { configManager } = require("./configManager");
 const { app, Tray, Menu, dialog, shell, globalShortcut, nativeImage, ipcMain, BrowserWindow, screen } = require("electron");
 const { initScaleManager } = require("./scaleManager");
 const { initWsBridge } = require("./wsBridge");
@@ -14,7 +14,7 @@ const fs = require("fs");
 const { spawn, exec } = require("child_process");
 const net = require("net");
 const isPyPacked = false;
-const devMode = true; // 開發模式
+const devMode = false; // 開發模式
 const { initDataHub } = require("./dataHub");
 
 // ------------------ Mica ------------------
@@ -27,9 +27,7 @@ try {
 }
 
 // ------------------ 狀態 ------------------
-let latestUiConfig = { ui: { mediaWindow: { visibilityMode: "auto" }, immersive_mode: "off" } };
-let desiredImmOn = false;
-let immAppliedOnce = false;
+let latestUiConfig = { ui: { mediaWindow: { visibilityMode: "auto" }, default_immersive_mode: "off" } };
 let tray = null;
 let pyProc = null;
 let mainWin = null;
@@ -39,11 +37,21 @@ let refreshWindowsPreference = true; // 是否允許創建視窗
 let isPlaying = false;
 let isImmOn = false;
 let windowsVisible = false;
+let lastMediaVisible = false; // Track last media window visibility state
 const autoShowFirstToggle = true;
+let scaleMgr = null; // Scale manager instance
 
 const PY_PORT = 54321;
 const MAX_RESTART = 5;
 let pyRestartCount = 0;
+
+// 輪詢間隔設定 (毫秒) - 可根據需要調整
+const POLL_INTERVALS = {
+  media: 1_000, // 1 秒 - 媒體狀態更新頻率
+  disk: 60_000, // 1 分鐘 - 磁碟空間
+  recyclebin: 60_000, // 1 分鐘 - 回收桶
+  quote: 600_000, // 10 分鐘 - 每日金句
+};
 
 let lastPyStart = 0;
 let restarting = false;
@@ -58,11 +66,6 @@ function resourcePath(...segments) {
   } else {
     return path.join(__dirname, ...segments);
   }
-}
-
-function parseImmersiveFromUi(uiObj) {
-  const v = (uiObj?.ui?.immersive_mode || "").toString().toLowerCase();
-  return v === "on";
 }
 
 // ------------------ 日誌 ------------------
@@ -276,6 +279,10 @@ function createWindowsIfNeeded() {
     return;
   }
 
+  // Get alwaysOnTop setting from UI config
+  const uiConfig = configManager.getConfig('ui');
+  const alwaysOnTop = uiConfig?.ui?.alwaysOnTop !== false; // Default to true if not specified
+
   mainWin = new MicaBrowserWindow({
     width: 1200,
     height: 700,
@@ -284,9 +291,11 @@ function createWindowsIfNeeded() {
     transparent: true,
     skipTaskbar: true,
     focusable: true,
-    alwaysOnTop: true,
+    alwaysOnTop: alwaysOnTop,
     show: false,
     webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false, // Set to false for preload.js compatibility
       preload: path.join(__dirname, "preload.js"),
     },
   });
@@ -303,6 +312,15 @@ function createWindowsIfNeeded() {
   if (fs.existsSync(primaryHtml)) mainWin.loadFile(primaryHtml);
   else writeLog("WIN", "缺少 primary.html: " + primaryHtml);
 
+  // Listen for main window ready
+  mainWin.webContents.once('did-finish-load', () => {
+    writeLog("WIN", "主視窗內容載入完成");
+    // Send initial configs after window is ready
+    if (configManager.isInitialized) {
+      setTimeout(() => configManager.sendInitialConfigsToWindows(), 100);
+    }
+  });
+
   mediaWin = new MicaBrowserWindow({
     width: 300,
     height: 511,
@@ -311,9 +329,11 @@ function createWindowsIfNeeded() {
     transparent: true,
     skipTaskbar: true,
     focusable: false,
-    alwaysOnTop: true,
+    alwaysOnTop: alwaysOnTop,
     show: false,
     webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false, // Set to false for preload.js compatibility
       preload: path.join(__dirname, "preload.js"),
     },
   });
@@ -328,6 +348,11 @@ function createWindowsIfNeeded() {
   const mediaHtml = resourcePath("./pages/mediaCard.html");
   if (fs.existsSync(mediaHtml)) mediaWin.loadFile(mediaHtml);
   else writeLog("WIN", "缺少 mediaCard.html: " + mediaHtml);
+
+  // Listen for media window ready
+  mediaWin.webContents.once('did-finish-load', () => {
+    writeLog("WIN", "媒體視窗內容載入完成");
+  });
 
   mainWin.on("close", (e) => {
     if (!app.isQuiting) {
@@ -378,22 +403,62 @@ function showWindows() {
 }
 
 // app.whenReady()
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   debugPaths();
   createTray();
   registerShortcuts();
   startPythonServer();
   createWindowsIfNeeded();
 
-  const dataHub = initDataHub({ getWindows: () => [mainWin, mediaWin], pyPort: 54321 });
+  const dataHub = initDataHub({
+    getWindows: () => [mainWin, mediaWin],
+    pyPort: PY_PORT,
+    pollIntervals: POLL_INTERVALS,
+  });
   dataHub.start();
   app.once("before-quit", () => dataHub.stop());
 
-  // 啟用設定檔熱更新：把 ui / commands 變更回呼接進來
-  setupConfigHotReload(() => [mainWin, mediaWin], {
+  // Initialize scale manager first
+  scaleMgr = initScaleManager(() => [mainWin, mediaWin], {
+    afterApply: () => {
+      if (!mainWin || !mediaWin) return;
+      if (!windowsVisible) return;
+      hideWindows();
+      setTimeout(() => showWindows(), 120);
+    },
+  });
+  scaleMgr.captureBaseBounds();
+  if (mainWin) mainWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
+  if (mediaWin) mediaWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
+
+  // Initialize new config system
+  await configManager.initialize(() => [mainWin, mediaWin], {
+    onThemeChange: (theme) => {
+      writeLog("CFG", "Theme updated via new config system");
+    },
     onUiChange: (ui) => {
+      writeLog("CFG", "UI config updated via new config system");
       latestUiConfig = ui || latestUiConfig;
       updateMediaVisibility();
+      
+      // Handle scale changes
+      if (ui?.ui?.scale && typeof scaleMgr?.setScale === 'function') {
+        const newScale = ui.ui.scale;
+        writeLog("CFG", `Applying scale change: ${newScale}`);
+        scaleMgr.setScale(newScale);
+      }
+      
+      // Handle alwaysOnTop changes
+      if (ui?.ui?.alwaysOnTop !== undefined) {
+        const alwaysOnTop = ui.ui.alwaysOnTop;
+        writeLog("CFG", `Applying alwaysOnTop change: ${alwaysOnTop}`);
+        if (mainWin && !mainWin.isDestroyed()) {
+          mainWin.setAlwaysOnTop(alwaysOnTop);
+        }
+        if (mediaWin && !mediaWin.isDestroyed()) {
+          mediaWin.setAlwaysOnTop(alwaysOnTop);
+        }
+      }
     },
     onCommandsChange: async (commandsObj, filePath) => {
       // 驗證 commands 基本格式
@@ -411,6 +476,51 @@ app.whenReady().then(() => {
       }
     },
   });
+
+  // Apply initial scale from loaded config
+  const initialUiConfig = configManager.getConfig('ui');
+  if (initialUiConfig?.ui?.scale && scaleMgr) {
+    writeLog("CFG", `Will apply initial scale: ${initialUiConfig.ui.scale}`);
+    
+    // Apply scale once both windows have finished loading their content
+    let mainReady = false;
+    let mediaReady = false;
+    
+    const checkAndApplyScale = () => {
+      if (mainReady && mediaReady) {
+        scaleMgr.captureBaseBounds();
+        scaleMgr.setScale(initialUiConfig.ui.scale);
+        writeLog("CFG", `Initial scale applied: ${initialUiConfig.ui.scale}`);
+      }
+    };
+    
+    if (mainWin) {
+      mainWin.webContents.once('did-finish-load', () => {
+        mainReady = true;
+        checkAndApplyScale();
+      });
+    } else {
+      mainReady = true;
+    }
+    
+    if (mediaWin) {
+      mediaWin.webContents.once('did-finish-load', () => {
+        mediaReady = true;
+        checkAndApplyScale();
+      });
+    } else {
+      mediaReady = true;
+    }
+    
+    // Fallback: apply after a timeout even if events don't fire
+    setTimeout(() => {
+      if (!mainReady || !mediaReady) {
+        writeLog("CFG", "Applying initial scale via fallback timeout");
+        scaleMgr.captureBaseBounds();
+        scaleMgr.setScale(initialUiConfig.ui.scale);
+      }
+    }, 2000);
+  }
 
   // 啟動 WS 橋接：Python → WS → main → IPC → UI
   const wsUrl = `ws://127.0.0.1:${PY_PORT}/ws`;
@@ -432,24 +542,13 @@ app.whenReady().then(() => {
     } catch {}
   });
 
-  // 縮放管理（如果你已加）
-  const scaleMgr = initScaleManager(() => [mainWin, mediaWin], {
-    afterApply: () => {
-      if (!mainWin || !mediaWin) return;
-      if (!windowsVisible) return;
-      hideWindows();
-      setTimeout(() => showWindows(), 120);
-    },
-  });
-  scaleMgr.captureBaseBounds();
-  if (mainWin) mainWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
-  if (mediaWin) mediaWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
 });
 
 function hideWindows() {
   if (mainWin) mainWin.hide();
   if (mediaWin) mediaWin.hide();
   windowsVisible = false;
+  lastMediaVisible = false; // Reset media visibility state when hiding all windows
 }
 
 function toggleWindows() {
@@ -468,27 +567,32 @@ function getMediaVisibilityMode() {
 function updateMediaVisibility() {
   if (!mediaWin) return;
 
+  let shouldBeVisible = false;
+
   // 若主介面目前沒顯示，media 一律隱藏
   if (!windowsVisible) {
-    mediaWin.hide();
-    return;
-  }
-
-  const mode = getMediaVisibilityMode();
-  if (mode === "never") {
-    mediaWin.hide();
-    return;
-  }
-  if (mode === "always") {
-    if (!mediaWin.isVisible()) mediaWin.showInactive();
-    return;
-  }
-
-  // auto：沿用既有條件（正在播放 且 非沉浸模式）
-  if (isPlaying && !isImmOn) {
-    if (!mediaWin.isVisible()) mediaWin.showInactive();
+    shouldBeVisible = false;
   } else {
-    mediaWin.hide();
+    const mode = getMediaVisibilityMode();
+    if (mode === "never") {
+      shouldBeVisible = false;
+    } else if (mode === "always") {
+      shouldBeVisible = true;
+    } else {
+      // auto：沿用既有條件（正在播放 且 非沉浸模式）
+      shouldBeVisible = isPlaying && !isImmOn;
+    }
+  }
+
+  // Only update visibility if state actually changed
+  if (shouldBeVisible !== lastMediaVisible) {
+    if (shouldBeVisible) {
+      if (!mediaWin.isVisible()) mediaWin.showInactive();
+    } else {
+      mediaWin.hide();
+    }
+    lastMediaVisible = shouldBeVisible;
+    writeLog("MEDIA_VIS", `Media window visibility changed to: ${shouldBeVisible}`);
   }
 }
 
@@ -582,6 +686,10 @@ function registerShortcuts() {
 // ------------------ IPC ------------------
 ipcMain.on("send-variable", (event, data) => {
   try {
+    // Ignore updates from media window to avoid conflicting state
+    if (mediaWin && event.sender === mediaWin.webContents) {
+      return;
+    }
     if (Object.prototype.hasOwnProperty.call(data, "isImmOn")) {
       isImmOn = data.isImmOn;
     }
@@ -620,6 +728,14 @@ async function cleanExit() {
   }
 
   await gracefulStopPython({ timeoutMs: 2000, fallbackKill: true });
+
+  // Clean up config manager
+  try {
+    configManager.destroy();
+    writeLog("CFG", "Config manager cleaned up");
+  } catch (e) {
+    writeLog("CFG-ERR", "Config manager cleanup error: " + e.message);
+  }
 
   try {
     globalShortcut.unregisterAll();
