@@ -1,10 +1,10 @@
 {
   "ui": {
-    "scale": 1,
+    "scale": 1.5,
     "alwaysOnTop": true,
     "mediaWindow": {
       "visibilityMode": "auto"
     },
-    "default_immersive_mode": "off"
+    "default_immersive_mode": "on"
   }
 }

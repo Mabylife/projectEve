@@ -15,7 +15,7 @@
     ],
     "mainTextOpacity": 1,
     "secondaryTextOpacity": 0.5,
-    "baseFontSizePx": 16,
+    "baseFontSizePx": 20,
     "fontFamily": "Space Mono"
   }
 }
