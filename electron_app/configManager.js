@@ -123,7 +123,6 @@ class ConfigManager {
     if (!fs.existsSync(filePath)) {
       const defaults = this.getDefaultConfigs();
       await this.writeJsonSafe(filePath, defaults[configName]);
-      console.log(`[ConfigManager] Created default ${configName}.json`);
     }
 
     return filePath;
@@ -139,7 +138,6 @@ class ConfigManager {
         const filePath = await this.ensureConfigFile(name);
         const config = await this.readJsonSafe(filePath);
         this.configs[name] = config || defaults[name];
-        console.log(`[ConfigManager] Loaded ${name} config`);
       } catch (error) {
         console.error(`[ConfigManager] Error loading ${name} config:`, error.message);
         this.configs[name] = defaults[name];
@@ -152,8 +150,6 @@ class ConfigManager {
   // Initialize config system
   async initialize(getWindowsFunction, options = {}) {
     this.getWindows = getWindowsFunction;
-
-    console.log("[ConfigManager] Initializing config system...");
 
     // Load all configs
     await this.loadConfigs();
@@ -172,21 +168,16 @@ class ConfigManager {
     await this.startWatching();
 
     this.isInitialized = true;
-    console.log("[ConfigManager] Initialization complete");
 
     return this;
   }
 
   // Send initial configs to windows once they're ready
   async sendInitialConfigsToWindows() {
-    console.log("[ConfigManager] Sending initial configs to windows...");
-    
     // Broadcast initial configs to all windows
     this.broadcastToAllWindows("theme:update", this.configs.theme);
     this.broadcastToAllWindows("ui:update", this.configs.ui);
     this.broadcastToAllWindows("commands:update", this.configs.commands);
-    
-    console.log("[ConfigManager] Initial configs sent to windows");
   }
 
   // Start file watching for hot reload
@@ -213,18 +204,17 @@ class ConfigManager {
         });
 
         watcher.on("change", async () => {
-          console.log(`[ConfigManager] Detected change in ${fileName}`);
-          
+
           // Debounce file changes to handle editors that write multiple times
           if (this.fileChangeTimeouts.has(fileName)) {
             clearTimeout(this.fileChangeTimeouts.get(fileName));
           }
-          
+
           const timeout = setTimeout(async () => {
             this.fileChangeTimeouts.delete(fileName);
             await this.handleFileChange(fileName, filePath);
           }, 200); // 200ms debounce
-          
+
           this.fileChangeTimeouts.set(fileName, timeout);
         });
 
@@ -233,7 +223,6 @@ class ConfigManager {
         });
 
         this.watchers.set(fileName, watcher);
-        console.log(`[ConfigManager] Watching ${fileName}`);
       } catch (error) {
         console.error(`[ConfigManager] Failed to watch ${fileName}:`, error.message);
       }
@@ -260,7 +249,6 @@ class ConfigManager {
       if (configToSend.ui.default_immersive_mode !== undefined) {
         // Remove default_immersive_mode from hot reload update
         delete configToSend.ui.default_immersive_mode;
-        console.log("[ConfigManager] Removed default_immersive_mode from hot reload (startup-only setting)");
       }
 
       // Broadcast the modified config (without default_immersive_mode)
@@ -271,8 +259,6 @@ class ConfigManager {
       this.broadcastToAllWindows(`${configName}:update`, newConfig);
       this.emit(`${configName}:change`, newConfig);
     }
-
-    console.log(`[ConfigManager] Config ${configName} hot-reloaded successfully`);
   }
 
   // Broadcast to all windows
@@ -280,13 +266,11 @@ class ConfigManager {
     if (!this.getWindows) return;
 
     const windows = this.getWindows().filter(Boolean);
-    console.log(`[ConfigManager] Broadcasting ${channel} to ${windows.length} window(s)`);
 
     windows.forEach((win, index) => {
       try {
         if (win && win.webContents && !win.isDestroyed()) {
           win.webContents.send(channel, data);
-          console.log(`[ConfigManager] Sent ${channel} to window ${index}`);
         }
       } catch (error) {
         console.error(`[ConfigManager] Failed to send ${channel} to window ${index}:`, error.message);
@@ -325,19 +309,16 @@ class ConfigManager {
 
   // Clean up
   destroy() {
-    console.log("[ConfigManager] Cleaning up...");
 
     // Clear any pending file change timeouts
     for (const [fileName, timeout] of this.fileChangeTimeouts) {
       clearTimeout(timeout);
-      console.log(`[ConfigManager] Cleared pending timeout for ${fileName}`);
     }
     this.fileChangeTimeouts.clear();
 
     for (const [fileName, watcher] of this.watchers) {
       try {
         watcher.close();
-        console.log(`[ConfigManager] Closed watcher for ${fileName}`);
       } catch (error) {
         console.error(`[ConfigManager] Error closing watcher for ${fileName}:`, error.message);
       }

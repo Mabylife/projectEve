@@ -32,11 +32,9 @@ function applyZoomAndResize(scale) {
           // Wait for content to finish loading
           mainWin.webContents.once('did-finish-load', () => {
             mainWin.webContents.setZoomFactor(scale);
-            console.log(`[ScaleManager] Applied delayed zoom factor ${scale} to main window`);
           });
         } else {
           mainWin.webContents.setZoomFactor(scale);
-          console.log(`[ScaleManager] Applied zoom factor ${scale} to main window`);
         }
       } catch (e) {
         console.error(`[ScaleManager] Failed to set zoom factor for main window:`, e.message);
@@ -51,11 +49,9 @@ function applyZoomAndResize(scale) {
           // Wait for content to finish loading
           mediaWin.webContents.once('did-finish-load', () => {
             mediaWin.webContents.setZoomFactor(scale);
-            console.log(`[ScaleManager] Applied delayed zoom factor ${scale} to media window`);
           });
         } else {
           mediaWin.webContents.setZoomFactor(scale);
-          console.log(`[ScaleManager] Applied zoom factor ${scale} to media window`);
         }
       } catch (e) {
         console.error(`[ScaleManager] Failed to set zoom factor for media window:`, e.message);

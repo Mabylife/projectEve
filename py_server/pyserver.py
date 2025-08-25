@@ -31,9 +31,12 @@ except ImportError:
 HOST = "0.0.0.0"
 PORT = 54321
 
+should_log = False  # 設為 True 可開啟詳細日誌
+
 
 def log(msg):
-    print(f"[LOG] {msg}")
+    if should_log:
+        log(f"[LOG] {msg}")
 
 
 def create_app() -> Quart:
@@ -263,7 +266,7 @@ def send_vk(*vk_codes, mode="combo", inter_key_delay_ms=0, hold_ms=50):
                     time.sleep(inter_key_delay_ms / 1000.0)
             return True
     except Exception as e:
-        print(f"[LOG] send_vk error: {e}")
+        log(f"[LOG] send_vk error: {e}")
         return False
 
 
@@ -409,7 +412,8 @@ async def get_media():
                 res = {
                     "title": getattr(info, "title", None),
                     "artist": getattr(info, "artist", None),
-                    "album": getattr(info, "album_title", None),  # Additional useful property
+                    "album": getattr(info, "album_title",
+                                     None),  # Additional useful property
                     "state":
                     _status_name(state) if state is not None else None,
                     "position": position,
@@ -722,7 +726,8 @@ async def main():
             log(f"load commands at startup error: {e}")
         app.background_tasks = set()
         # 移除 media watchdog - 現在由 Main 進程定時輪詢
-        log("Background tasks started (media polling removed, handled by Main).")
+        log("Background tasks started (media polling removed, handled by Main)."
+            )
 
     @app.after_serving
     async def _cleanup():
