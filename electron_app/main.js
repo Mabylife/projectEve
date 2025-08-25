@@ -290,7 +290,7 @@ function createWindowsIfNeeded() {
     show: false,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: true,
+      contextIsolation: false, // Set to false for preload.js compatibility
       preload: path.join(__dirname, "preload.js"),
     },
   });
@@ -319,7 +319,7 @@ function createWindowsIfNeeded() {
     show: false,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: true,
+      contextIsolation: false, // Set to false for preload.js compatibility
       preload: path.join(__dirname, "preload.js"),
     },
   });

@@ -60,8 +60,6 @@ async function ensureDefaultConfigs() {
     ui: {
       scale: 1,
       alwaysOnTop: true,
-      nodeIntegration: true,
-      contextIsolation: false,
       mediaWindow: {
         visibilityMode: "auto",
       },
