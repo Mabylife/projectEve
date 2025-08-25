@@ -2,8 +2,6 @@
   "ui": {
     "scale": 1,
     "alwaysOnTop": true,
-    "nodeIntegration": true,
-    "contextIsolation": true,
     "mediaWindow": {
       "visibilityMode": "auto"
     },

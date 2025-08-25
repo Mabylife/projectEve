@@ -7,6 +7,7 @@
     "textColor": [255, 255, 255],
     "mainTextOpacity": 1,
     "secondaryTextOpacity": 0.5,
+    "baseFontSizePx": 16,
     "fontFamily": "Space Mono"
   }
 }

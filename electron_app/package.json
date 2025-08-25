@@ -7,8 +7,8 @@
   "private": true,
   "main": "main.js",
   "scripts": {
-    "dev": "electron .",
-    "start": "electron .",
+    "dev": "electron . --no-sandbox --disable-dev-shm-usage",
+    "start": "electron . --no-sandbox --disable-dev-shm-usage",
     "build": "electron-builder --win portable"
   },
   "dependencies": {

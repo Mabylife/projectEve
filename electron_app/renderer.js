@@ -61,6 +61,7 @@
   }
 
   function applyTheme(themeObj) {
+    console.log("[EVE][THEME] Applying theme:", themeObj);
     state.theme = themeObj || {};
     const t = state.theme?.theme || {};
 
@@ -71,6 +72,8 @@
     const secondaryOpacity = t.secondaryTextOpacity ?? 0.5;
     const baseFontSizePx = t.baseFontSizePx ?? 16;
     const blurPx = t.backdropBlurPx ?? 20;
+
+    console.log("[EVE][THEME] Setting CSS variables - bg:", bgRGB, "opacity:", bgOpacity, "fontSize:", baseFontSizePx);
 
     const root = document.documentElement;
     root.style.setProperty("--eve-bg-rgb", arrToRgb(bgRGB));
@@ -85,16 +88,20 @@
   }
 
   function applyUiConfig(uiObj) {
+    console.log("[EVE][UI] Applying UI config:", uiObj);
     state.ui = uiObj || {};
     const u = state.ui?.ui || {};
 
     const scale = u.scale ?? 1;
     const baseSize = state.theme?.theme?.baseFontSizePx ?? 16;
-    document.documentElement.style.setProperty("--eve-font-size", `${baseSize * scale}px`);
+    const newFontSize = `${baseSize * scale}px`;
+    console.log("[EVE][UI] Setting font size to:", newFontSize, "(base:", baseSize, "scale:", scale, ")");
+    document.documentElement.style.setProperty("--eve-font-size", newFontSize);
 
     if (typeof u.default_immersive_mode === "string" && isInitialLoad) {
       const v = u.default_immersive_mode.toLowerCase();
       state.isImmOn = v === "on";
+      console.log("[EVE][UI] Setting initial immersive mode to:", state.isImmOn);
       reflectMediaToMain();
     }
 
