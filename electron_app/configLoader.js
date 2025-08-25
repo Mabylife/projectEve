@@ -57,8 +57,12 @@ async function ensureDefaultConfigs(app) {
 
   await writeJsonIfMissing(path.join(configDir, "ui.json"), {
     ui: {
-      scale: 1.0,
-      windowOpacity: 1.0,
+      scale: 1,
+      alwaysOnTop: true,
+      mediaWindow: {
+        visibilityMode: "auto",
+      },
+      default_immersive_mode: "off",
     },
   });
 
