@@ -72,19 +72,24 @@
     const secondaryOpacity = t.secondaryTextOpacity ?? 0.5;
     const baseFontSizePx = t.baseFontSizePx ?? 16;
     const blurPx = t.backdropBlurPx ?? 20;
+    const fontFamily = t.fontFamily || "Space Mono";
 
-    console.log("[EVE][THEME] Setting CSS variables - bg:", bgRGB, "opacity:", bgOpacity, "fontSize:", baseFontSizePx);
+    console.log("[EVE][THEME] Setting CSS variables - bg:", bgRGB, "opacity:", bgOpacity, "fontSize:", baseFontSizePx, "fontFamily:", fontFamily);
 
     const root = document.documentElement;
-    root.style.setProperty("--eve-bg-rgb", arrToRgb(bgRGB));
-    root.style.setProperty("--eve-bg-rgba", arrToRgba(bgRGB, bgOpacity));
-    root.style.setProperty("--eve-text-rgb", arrToRgb(textRGB));
-    root.style.setProperty("--eve-text-main-opacity", String(mainOpacity));
-    root.style.setProperty("--eve-text-secondary-opacity", String(secondaryOpacity));
-    root.style.setProperty("--eve-font-size", `${baseFontSizePx}px`);
-    root.style.setProperty("--eve-backdrop-blur", `${blurPx}px`);
+    // Use CSS variable names that match component.css
+    root.style.setProperty("--background-color", arrToRgb(bgRGB));
+    root.style.setProperty("--background-opacity", String(bgOpacity));
+    root.style.setProperty("--text-color", arrToRgb(textRGB));
+    root.style.setProperty("--main-text-opacity", String(mainOpacity));
+    root.style.setProperty("--secondary-text-opacity", String(secondaryOpacity));
+    root.style.setProperty("--backdrop-blur", `${blurPx}px`);
+    root.style.fontSize = `${baseFontSizePx}px`;
 
-    document.body.style.color = arrToRgb(textRGB);
+    // Apply font family to body for broader coverage
+    if (fontFamily) {
+      document.body.style.fontFamily = fontFamily;
+    }
   }
 
   function applyUiConfig(uiObj) {

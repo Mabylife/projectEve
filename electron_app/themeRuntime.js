@@ -43,7 +43,8 @@ function applyTheme(themeFile) {
     textColor: rgbTupleToVar(t.textColor),
     mainTextOpacity: String(t.mainTextOpacity ?? 1),
     secondaryTextOpacity: String(t.secondaryTextOpacity ?? 0.5),
-    fontSize: `${Math.max(8, Number(t.baseFontSizePx ?? 16))}px`
+    fontSize: `${Math.max(8, Number(t.baseFontSizePx ?? 16))}px`,
+    fontFamily: t.fontFamily || defaultTheme.theme.fontFamily
   });
   
   rootStyle.setProperty("--background-color", rgbTupleToVar(t.backgroundColor));
@@ -55,6 +56,14 @@ function applyTheme(themeFile) {
 
   const baseFontPx = Math.max(8, Number(t.baseFontSizePx ?? 16));
   document.documentElement.style.fontSize = `${baseFontPx}px`;
+  
+  // Apply font family if specified
+  const fontFamily = t.fontFamily || defaultTheme.theme.fontFamily;
+  if (fontFamily) {
+    rootStyle.setProperty("--font-family", fontFamily);
+    // Also apply directly to body for broader coverage
+    document.body.style.fontFamily = fontFamily;
+  }
 }
 
 function clampScale(s) {
