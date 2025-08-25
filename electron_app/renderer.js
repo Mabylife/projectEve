@@ -365,13 +365,15 @@
                   outputContainer.innerHTML = "";
                 } else {
                   // Clear all output except initial help messages
-                  const helpMessages = outputContainer.querySelectorAll("p.small");
+                  const helpMessages = ["use - or / to use prefix commands", "use help prefix to get more info"];
                   outputContainer.innerHTML = "";
                   // Add back the first two help messages
-                  if (helpMessages.length >= 2) {
-                    outputContainer.appendChild(helpMessages[0].cloneNode(true));
-                    outputContainer.appendChild(helpMessages[1].cloneNode(true));
-                  }
+                  helpMessages.forEach((msg) => {
+                    const p = document.createElement("p");
+                    p.className = "small";
+                    p.textContent = msg;
+                    outputContainer.appendChild(p);
+                  });
                 }
               }
             }

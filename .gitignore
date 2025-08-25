@@ -4,4 +4,3 @@ electron_app/dist/
 py_server/*
 !py_server/pyserver.py
 test_result.md
-AGENT_HANDOFF_NOTES.md
