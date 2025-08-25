@@ -5,7 +5,7 @@
 //
 // 若需重新啟動 JS server，可在 restartServices 中加入自定 reload 邏輯 (目前僅重啟 Python)
 
-const { setupConfigHotReload } = require("./configWatcher");
+const { configManager } = require("./configManager");
 const { app, Tray, Menu, dialog, shell, globalShortcut, nativeImage, ipcMain, BrowserWindow, screen } = require("electron");
 const { initScaleManager } = require("./scaleManager");
 const { initWsBridge } = require("./wsBridge");
@@ -39,6 +39,7 @@ let isImmOn = false;
 let windowsVisible = false;
 let lastMediaVisible = false; // Track last media window visibility state
 const autoShowFirstToggle = true;
+let scaleMgr = null; // Scale manager instance
 
 const PY_PORT = 54321;
 const MAX_RESTART = 5;
@@ -384,7 +385,7 @@ function showWindows() {
 }
 
 // app.whenReady()
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   debugPaths();
   createTray();
   registerShortcuts();
@@ -399,16 +400,35 @@ app.whenReady().then(() => {
   dataHub.start();
   app.once("before-quit", () => dataHub.stop());
 
-  // 啟用設定檔熱更新：把 ui / commands 變更回呼接進來
-  setupConfigHotReload(() => [mainWin, mediaWin], {
+  // Initialize scale manager first
+  scaleMgr = initScaleManager(() => [mainWin, mediaWin], {
+    afterApply: () => {
+      if (!mainWin || !mediaWin) return;
+      if (!windowsVisible) return;
+      hideWindows();
+      setTimeout(() => showWindows(), 120);
+    },
+  });
+  scaleMgr.captureBaseBounds();
+  if (mainWin) mainWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
+  if (mediaWin) mediaWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
+
+  // Initialize new config system
+  await configManager.initialize(() => [mainWin, mediaWin], {
     onThemeChange: (theme) => {
-      writeLog("CFG", "Theme updated, broadcasting to renderers");
-      // Theme changes are automatically broadcast by setupConfigHotReload
+      writeLog("CFG", "Theme updated via new config system");
     },
     onUiChange: (ui) => {
-      writeLog("CFG", "UI config updated");
+      writeLog("CFG", "UI config updated via new config system");
       latestUiConfig = ui || latestUiConfig;
       updateMediaVisibility();
+      
+      // Handle scale changes
+      if (ui?.ui?.scale && typeof scaleMgr?.setScale === 'function') {
+        const newScale = ui.ui.scale;
+        writeLog("CFG", `Applying scale change: ${newScale}`);
+        scaleMgr.setScale(newScale);
+      }
     },
     onCommandsChange: async (commandsObj, filePath) => {
       // 驗證 commands 基本格式
@@ -426,6 +446,13 @@ app.whenReady().then(() => {
       }
     },
   });
+
+  // Apply initial scale from loaded config
+  const initialUiConfig = configManager.getConfig('ui');
+  if (initialUiConfig?.ui?.scale && scaleMgr) {
+    writeLog("CFG", `Applying initial scale: ${initialUiConfig.ui.scale}`);
+    scaleMgr.setScale(initialUiConfig.ui.scale);
+  }
 
   // 啟動 WS 橋接：Python → WS → main → IPC → UI
   const wsUrl = `ws://127.0.0.1:${PY_PORT}/ws`;
@@ -447,18 +474,6 @@ app.whenReady().then(() => {
     } catch {}
   });
 
-  // 縮放管理（如果你已加）
-  const scaleMgr = initScaleManager(() => [mainWin, mediaWin], {
-    afterApply: () => {
-      if (!mainWin || !mediaWin) return;
-      if (!windowsVisible) return;
-      hideWindows();
-      setTimeout(() => showWindows(), 120);
-    },
-  });
-  scaleMgr.captureBaseBounds();
-  if (mainWin) mainWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
-  if (mediaWin) mediaWin.once("ready-to-show", () => scaleMgr.captureBaseBounds());
 });
 
 function hideWindows() {
@@ -645,6 +660,14 @@ async function cleanExit() {
   }
 
   await gracefulStopPython({ timeoutMs: 2000, fallbackKill: true });
+
+  // Clean up config manager
+  try {
+    configManager.destroy();
+    writeLog("CFG", "Config manager cleaned up");
+  } catch (e) {
+    writeLog("CFG-ERR", "Config manager cleanup error: " + e.message);
+  }
 
   try {
     globalShortcut.unregisterAll();

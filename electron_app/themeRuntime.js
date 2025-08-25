@@ -5,19 +5,23 @@ const defaultTheme = {
   version: 1,
   theme: {
     backgroundColor: [0, 0, 0],
-    backgroundOpacity: 0.25,
+    backgroundOpacity: 0,
     backdropBlurPx: 20,
     textColor: [255, 255, 255],
     mainTextOpacity: 1,
     secondaryTextOpacity: 0.5,
-    baseFontSizePx: 16,
+    baseFontSizePx: 20,
+    fontFamily: "Space Mono",
   },
 };
 
 const defaultUi = {
   ui: {
-    scale: 1.0,
-    windowOpacity: 0.98,
+    scale: 1,
+    alwaysOnTop: true,
+    mediaWindow: {
+      visibilityMode: "auto",
+    },
     default_immersive_mode: "off",
   },
 };
@@ -49,11 +53,6 @@ function clampScale(s) {
 
 function applyUi(uiFile) {
   const u = uiFile?.ui ?? defaultUi.ui;
-
-  // 視窗內容整體透明度（保留熱更新）
-  if (typeof u.windowOpacity === "number") {
-    document.body.style.opacity = String(u.windowOpacity);
-  }
 
   // 整頁縮放交給主行程（保留熱更新）
   const n = Number(u.scale ?? 1.0);

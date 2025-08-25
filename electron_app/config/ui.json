@@ -3,8 +3,8 @@
     "scale": 1,
     "alwaysOnTop": true,
     "mediaWindow": {
-      "visibilityMode": "auto"
+      "visibilityMode": "always" 
     },
-    "default_immersive_mode": "on"
+    "default_immersive_mode": "off"
   }
 }
