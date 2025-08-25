@@ -279,6 +279,10 @@ function createWindowsIfNeeded() {
     return;
   }
 
+  // Get alwaysOnTop setting from UI config
+  const uiConfig = configManager.getConfig('ui');
+  const alwaysOnTop = uiConfig?.ui?.alwaysOnTop !== false; // Default to true if not specified
+
   mainWin = new MicaBrowserWindow({
     width: 1200,
     height: 700,
@@ -287,7 +291,7 @@ function createWindowsIfNeeded() {
     transparent: true,
     skipTaskbar: true,
     focusable: true,
-    alwaysOnTop: true,
+    alwaysOnTop: alwaysOnTop,
     show: false,
     webPreferences: {
       nodeIntegration: true,
@@ -316,7 +320,7 @@ function createWindowsIfNeeded() {
     transparent: true,
     skipTaskbar: true,
     focusable: false,
-    alwaysOnTop: true,
+    alwaysOnTop: alwaysOnTop,
     show: false,
     webPreferences: {
       nodeIntegration: true,
@@ -429,6 +433,18 @@ app.whenReady().then(async () => {
         writeLog("CFG", `Applying scale change: ${newScale}`);
         scaleMgr.setScale(newScale);
       }
+      
+      // Handle alwaysOnTop changes
+      if (ui?.ui?.alwaysOnTop !== undefined) {
+        const alwaysOnTop = ui.ui.alwaysOnTop;
+        writeLog("CFG", `Applying alwaysOnTop change: ${alwaysOnTop}`);
+        if (mainWin && !mainWin.isDestroyed()) {
+          mainWin.setAlwaysOnTop(alwaysOnTop);
+        }
+        if (mediaWin && !mediaWin.isDestroyed()) {
+          mediaWin.setAlwaysOnTop(alwaysOnTop);
+        }
+      }
     },
     onCommandsChange: async (commandsObj, filePath) => {
       // 驗證 commands 基本格式
@@ -451,7 +467,29 @@ app.whenReady().then(async () => {
   const initialUiConfig = configManager.getConfig('ui');
   if (initialUiConfig?.ui?.scale && scaleMgr) {
     writeLog("CFG", `Applying initial scale: ${initialUiConfig.ui.scale}`);
-    scaleMgr.setScale(initialUiConfig.ui.scale);
+    // Wait for windows to be ready for base bounds capture
+    Promise.all([
+      new Promise(resolve => {
+        if (mainWin) {
+          mainWin.once('ready-to-show', resolve);
+        } else {
+          resolve();
+        }
+      }),
+      new Promise(resolve => {
+        if (mediaWin) {
+          mediaWin.once('ready-to-show', resolve);
+        } else {
+          resolve();
+        }
+      })
+    ]).then(() => {
+      setTimeout(() => {
+        scaleMgr.captureBaseBounds();
+        scaleMgr.setScale(initialUiConfig.ui.scale);
+        writeLog("CFG", `Initial scale applied: ${initialUiConfig.ui.scale}`);
+      }, 50);
+    });
   }
 
   // 啟動 WS 橋接：Python → WS → main → IPC → UI

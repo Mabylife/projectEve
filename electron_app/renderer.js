@@ -100,8 +100,9 @@
 
     if (typeof u.default_immersive_mode === "string" && isInitialLoad) {
       const v = u.default_immersive_mode.toLowerCase();
-      state.isImmOn = v === "on";
-      console.log("[EVE][UI] Setting initial immersive mode to:", state.isImmOn);
+      const shouldBeImmersive = v === "on";
+      console.log("[EVE][UI] Setting initial immersive mode to:", shouldBeImmersive);
+      setImmersive(shouldBeImmersive);
       reflectMediaToMain();
     }
 

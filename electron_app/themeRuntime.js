@@ -32,8 +32,20 @@ function rgbTupleToVar(arr, fallback = [0, 0, 0]) {
 }
 
 function applyTheme(themeFile) {
+  console.log("[THEME] Applying theme:", themeFile);
   const t = themeFile?.theme ?? defaultTheme.theme;
   const rootStyle = document.documentElement.style;
+  
+  console.log("[THEME] Setting CSS variables:", {
+    backgroundColor: rgbTupleToVar(t.backgroundColor),
+    backgroundOpacity: String(t.backgroundOpacity ?? 0.25),
+    backdropBlur: `${Number(t.backdropBlurPx ?? 20)}px`,
+    textColor: rgbTupleToVar(t.textColor),
+    mainTextOpacity: String(t.mainTextOpacity ?? 1),
+    secondaryTextOpacity: String(t.secondaryTextOpacity ?? 0.5),
+    fontSize: `${Math.max(8, Number(t.baseFontSizePx ?? 16))}px`
+  });
+  
   rootStyle.setProperty("--background-color", rgbTupleToVar(t.backgroundColor));
   rootStyle.setProperty("--background-opacity", String(t.backgroundOpacity ?? 0.25));
   rootStyle.setProperty("--backdrop-blur", `${Number(t.backdropBlurPx ?? 20)}px`);
