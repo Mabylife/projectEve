@@ -64,15 +64,32 @@ def _resolve_config_dir() -> Path:
         p = Path(env)
         p.mkdir(parents=True, exist_ok=True)
         return p
+
     start = _exe_dir()
+
     candidates = [
-        start.parent.parent / "config",  # electron_app/config
-        start.parent.parent.parent / "config",  # repo 根/config
-        start / "config",  # 與 exe 同層 config
+        # 典型：從 repo 根目錄執行 py_server/pyserver.py
+        start.parent / "electron_app" / "config",  # <repo>/electron_app/config
+        # 典型：從 electron_app/servers/py 打包（或直接在該層執行）
+        start.parent.parent /
+        "config",  # <repo>/electron_app/config 於 start=e.a/servers/py
+        # 其他可能：往上一層或兩層再找 electron_app/config
+        start.parent.parent / "electron_app" / "config",
+        start.parent.parent.parent / "electron_app" / "config",
+        # repo 根/config（若你未來改為放這裡）
+        start.parent / "config",
+        start.parent.parent / "config",
+        # 與執行檔同層的 config（最後的 fallback）
+        start / "config",
     ]
+
     for c in candidates:
-        if c.exists():
-            return c
+        try:
+            if c.exists():
+                return c
+        except Exception:
+            pass
+
     fallback = start / "config"
     fallback.mkdir(parents=True, exist_ok=True)
     return fallback
@@ -346,6 +363,8 @@ def _load_commands_from_disk():
         else:
             LOADED_COMMANDS = {"version": 2, "commands": []}
             CMD_INDEX.clear()
+            log(f"CONFIG_DIR={CONFIG_DIR}, COMMANDS_FILE={COMMANDS_FILE}, loaded_prefixes={list(CMD_INDEX.keys())}"
+                )
             return False
     except Exception as e:
         log(f"load commands error: {e}")
@@ -639,36 +658,55 @@ def _match_command_from_json(prefix: str, cmd_text: str):
     return None
 
 
-# ---------- 終端指令 ----------
 @app.route("/terminal/run", methods=["POST"])
 async def terminal_run():
     data = await request.get_json()
     input_cmd = (data.get("input", "") or "").strip()
     log(f"Terminal API called: input={input_cmd}")
 
-    # 解析 prefix 格式：/prefix xxx 或 -prefix xxx
+    def _unknown_prefix_response(pfx: str):
+        prefixes = _list_prefixes()
+        lines = [f"Unknown prefix: {pfx}"]
+        if prefixes:
+            lines.append("Available prefixes:")
+            for p in prefixes:
+                cnt = len(CMD_INDEX.get(p, []))
+                lines.append(f"- {p} ({cnt} commands)  try: /{p} help")
+            lines.append("")
+            lines.append("Tip: type /help to see all prefixes.")
+        else:
+            lines.append("No custom commands configured. Type /help.")
+        return {"output": lines, "success": False}
+
+    # 解析 /prefix xxx 或 -prefix xxx
     prefix_match = re.match(r"^[/-](\w+)\s*(.*)$", input_cmd)
     if prefix_match:
         prefix = prefix_match.group(1).strip().lower()
         cmd = (prefix_match.group(2) or "").strip()
 
-        # /help → 顯示所有 prefix
+        # /help 或 -help
         if prefix == "help" and (not cmd or cmd.lower() in ("", "help", "?")):
-            output = _build_help_all()
-            return jsonify({"output": output, "success": True})
+            return jsonify({"output": _build_help_all(), "success": True})
 
-        # /{prefix} help → 顯示該 prefix 下的所有命令
-        if cmd.lower() in ("help", "?"):
-            output = _build_help_for_prefix(prefix)
-            return jsonify({"output": output, "success": True})
+        # prefix 不存在於 commands 索引
+        if prefix not in CMD_INDEX:
+            return jsonify(_unknown_prefix_response(prefix))
 
-        # JSON 匹配
+        # 沒帶子指令：直接顯示該 prefix 的說明
+        if not cmd or cmd.lower() in ("help", "?"):
+            return jsonify({
+                "output": _build_help_for_prefix(prefix),
+                "success": True
+            })
+
+        # 嘗試命中該 prefix 下的某條命令
         cmd_def = _match_command_from_json(prefix, cmd)
         if cmd_def:
             action = cmd_def.get("action", {})
             t = (action.get("type") or "").lower()
             ok = False
             flags = {}
+
             if t == "function":
                 ok, flags = _run_builtin_function(action.get("name"))
             elif t == "send_vk":
@@ -691,51 +729,51 @@ async def terminal_run():
                 cmd_def.get("output_ok" if ok else "output_fail"),
                 default_text_ok=cmd_def.get("name") or "Done",
                 default_text_fail="Failed",
-                ok=ok)
+                ok=ok,
+            )
             res = {"output": output, "success": bool(ok)}
             res.update(flags)
             return jsonify(res)
 
-        # 如果指定了 prefix，但未命中 JSON，落回舊的「未知命令」訊息
+        # prefix 正確但子指令不匹配：列出該 prefix 的所有可用指令
         return jsonify({
-            "output": [f"Unknown command for {prefix} prefix: {cmd}"],
-            "success":
-            False
+            "output": _build_help_for_prefix(prefix),
+            "success": False
         })
 
     # 無 prefix 情況：支援頂層 help
     if input_cmd.lower() in ("help", "-help", "/help", "?"):
-        output = _build_help_all()
-        return jsonify({"output": output, "success": True})
+        return jsonify({"output": _build_help_all(), "success": True})
 
     # 數學運算白名單
     math_expr = re.compile(r"^[0-9+\-*/^().\s]+$")
     if math_expr.match(input_cmd) and input_cmd:
         try:
             calc_result = eval(input_cmd, {"__builtins__": None, "math": math})
-            result = {"output": [f"Result: {calc_result}"], "success": True}
+            return jsonify({
+                "output": [f"Result: {calc_result}"],
+                "success": True
+            })
         except Exception as e:
-            result = {
+            return jsonify({
                 "output": [f"Error in calculation: {e}"],
                 "success": False
-            }
-        return jsonify(result)
+            })
 
     # 預設：Win+R 啟動（維持相容）
     try:
         ok = _powershell_start_process(input_cmd)
-        result = {
+        return jsonify({
             "output": [f"Launched: {input_cmd}"]
             if ok else [f"Failed to launch: {input_cmd}"],
             "success":
             ok
-        }
+        })
     except Exception:
-        result = {
+        return jsonify({
             "output": [f"Failed to launch: {input_cmd}"],
             "success": False
-        }
-    return jsonify(result)
+        })
 
 
 # 簡易健康檢查
