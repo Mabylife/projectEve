@@ -16,6 +16,7 @@ import os
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 try:
     from winrt.windows.media.control import (
@@ -58,7 +59,7 @@ def _exe_dir() -> Path:
     return Path(__file__).parent
 
 
-def _resolve_config_dir() -> Path:
+def _resolve__electron_app_dir() -> Path:
     env = os.environ.get("EVE_CONFIG_DIR")
     if env:
         p = Path(env)
@@ -69,18 +70,13 @@ def _resolve_config_dir() -> Path:
 
     candidates = [
         # 典型：從 repo 根目錄執行 py_server/pyserver.py
-        start.parent / "electron_app" / "config",  # <repo>/electron_app/config
+        start.parent / "electron_app",  # <repo>/electron_app
         # 典型：從 electron_app/servers/py 打包（或直接在該層執行）
         start.parent.parent /
-        "config",  # <repo>/electron_app/config 於 start=e.a/servers/py
+        "electron_app",  # <repo>/electron_app/config 於 start=e.a/servers/py
         # 其他可能：往上一層或兩層再找 electron_app/config
-        start.parent.parent / "electron_app" / "config",
-        start.parent.parent.parent / "electron_app" / "config",
-        # repo 根/config（若你未來改為放這裡）
-        start.parent / "config",
-        start.parent.parent / "config",
-        # 與執行檔同層的 config（最後的 fallback）
-        start / "config",
+        start.parent.parent / "electron_app",
+        start.parent.parent.parent / "electron_app",
     ]
 
     for c in candidates:
@@ -95,10 +91,9 @@ def _resolve_config_dir() -> Path:
     return fallback
 
 
-CONFIG_DIR = _resolve_config_dir()
-COMMANDS_FILE = CONFIG_DIR / "commands.json"
-SHORTCUTS_DIR = Path(
-    os.environ.get("EVE_SHORTCUTS_DIR", CONFIG_DIR / "shortcuts"))
+CONFIG_DIR = _resolve__electron_app_dir()
+COMMANDS_FILE = CONFIG_DIR / "config" / "commands.json"
+SHORTCUTS_DIR = CONFIG_DIR / "shortcuts"
 
 
 # ---------- 媒體工具 ----------
@@ -322,6 +317,10 @@ def _validate_commands_v2(obj) -> bool:
                 return False
             if t == "open_url" and not a.get("url"):
                 return False
+            # 新增：args_mode 檢查（可省略；省略視為 "none"）
+            am = c.get("args_mode", "none")
+            if am not in ("none", "free"):
+                return False
         return True
     except Exception:
         return False
@@ -340,6 +339,7 @@ def _rebuild_cmd_index():
         c["_cmds_norm"] = [
             _normalize_spaces(x).lower() for x in c.get("cmds", [])
         ]
+        c["_args_mode"] = c.get("args_mode", "none")
         CMD_INDEX.setdefault(p, []).append(c)
 
 
@@ -559,7 +559,7 @@ async def get_media():
 
 
 # ---------- 內建 function 對應 ----------
-def _run_builtin_function(name: str):
+def _run_builtin_function(name: str, arg: Optional[str] = None):
     name = (name or "").strip().lower()
     flags = {}
     ok = False
@@ -627,6 +627,29 @@ def _run_builtin_function(name: str):
         ok = True
         flags = {"isReconnect": True}
 
+    elif name == "search":
+        # /{prefix} s <keywords...> → Google
+        q = (arg or "").strip()
+        if not q:
+            return False, flags
+        q_enc = urllib.parse.quote_plus(q)
+        url = f"https://www.google.com/search?q={q_enc}"
+        ok = open_url(url)
+        return ok, flags
+
+    elif name == "auto_dir_search":
+        # /{prefix} <bang or term> → DuckDuckGo with leading !
+        q = (arg or "").strip()
+        if not q:
+            return False, flags
+        if not q.startswith("!"):
+            q = "!" + q
+        # 保留 ! 不被編碼，其他照常 urlencode（避免空白被吃掉）
+        q_enc = urllib.parse.quote_plus(q, safe="!")
+        url = f"https://duckduckgo.com/?q={q_enc}"
+        ok = open_url(url)
+        return ok, flags
+
     else:
         ok = False
 
@@ -650,12 +673,28 @@ def _format_output(val,
 
 def _match_command_from_json(prefix: str, cmd_text: str):
     p = (prefix or "").strip().lower()
-    rest = _normalize_spaces(cmd_text).lower()
+    rest = _normalize_spaces(cmd_text)
+    rest_l = rest.lower()
     items = CMD_INDEX.get(p, [])
     for c in items:
-        if rest in c.get("_cmds_norm", []):
-            return c
-    return None
+        if c.get("_args_mode") == "free":
+            for pat in c.get("_cmds_norm", []):
+                # 空字串：整段 rest 都當作參數（需有內容）
+                if pat == "":
+                    if rest:
+                        return c, rest
+                    continue
+                # 以 "pat " 開頭 → 後面整段是參數
+                if rest_l.startswith(pat + " ") and len(rest_l) > len(pat) + 1:
+                    arg = rest[len(pat) + 1:]  # 保留原大小寫/空白
+                    return c, arg
+            # 若 args_mode=free 但沒有命中任何 pat，繼續檢查下一條
+            continue
+        else:
+            # 精準比對（大小寫不敏感）
+            if rest_l in c.get("_cmds_norm", []):
+                return c, None
+    return None, None
 
 
 @app.route("/terminal/run", methods=["POST"])
@@ -678,29 +717,25 @@ async def terminal_run():
             lines.append("No custom commands configured. Type /help.")
         return {"output": lines, "success": False}
 
-    # 解析 /prefix xxx 或 -prefix xxx
     prefix_match = re.match(r"^[/-](\w+)\s*(.*)$", input_cmd)
     if prefix_match:
         prefix = prefix_match.group(1).strip().lower()
         cmd = (prefix_match.group(2) or "").strip()
 
-        # /help 或 -help
         if prefix == "help" and (not cmd or cmd.lower() in ("", "help", "?")):
             return jsonify({"output": _build_help_all(), "success": True})
 
-        # prefix 不存在於 commands 索引
         if prefix not in CMD_INDEX:
             return jsonify(_unknown_prefix_response(prefix))
 
-        # 沒帶子指令：直接顯示該 prefix 的說明
         if not cmd or cmd.lower() in ("help", "?"):
             return jsonify({
                 "output": _build_help_for_prefix(prefix),
                 "success": True
             })
 
-        # 嘗試命中該 prefix 下的某條命令
-        cmd_def = _match_command_from_json(prefix, cmd)
+        # 取得命中與參數
+        cmd_def, arg = _match_command_from_json(prefix, cmd)
         if cmd_def:
             action = cmd_def.get("action", {})
             t = (action.get("type") or "").lower()
@@ -708,7 +743,22 @@ async def terminal_run():
             flags = {}
 
             if t == "function":
-                ok, flags = _run_builtin_function(action.get("name"))
+                fname = (action.get("name") or "").lower()
+                ok, flags = _run_builtin_function(fname, arg)
+                # 針對 search 系列給友善輸出
+                if fname in ("search", "auto_dir_search"):
+                    if not (arg or "").strip():
+                        return jsonify({
+                            "output": ["No search query"],
+                            "success": False
+                        })
+                    msg = "Searching: " + arg if fname == "search" else "Searching (Auto direct): " + arg
+                    return jsonify({
+                        "output": [msg],
+                        "success": bool(ok),
+                        **flags
+                    })
+
             elif t == "send_vk":
                 keys = action.get("keys", [])
                 mode = action.get("mode", "combo")
@@ -718,10 +768,13 @@ async def terminal_run():
                              mode=mode,
                              inter_key_delay_ms=inter,
                              hold_ms=hold)
+
             elif t == "open_shortcut":
                 ok = open_shortcut(action.get("name", ""))
+
             elif t == "open_url":
                 ok = open_url(action.get("url", ""))
+
             else:
                 ok = False
 
@@ -741,11 +794,10 @@ async def terminal_run():
             "success": False
         })
 
-    # 無 prefix 情況：支援頂層 help
+    # 無 prefix：help / 計算 / Win+R fallback（原樣保留）
     if input_cmd.lower() in ("help", "-help", "/help", "?"):
         return jsonify({"output": _build_help_all(), "success": True})
 
-    # 數學運算白名單
     math_expr = re.compile(r"^[0-9+\-*/^().\s]+$")
     if math_expr.match(input_cmd) and input_cmd:
         try:
@@ -760,7 +812,6 @@ async def terminal_run():
                 "success": False
             })
 
-    # 預設：Win+R 啟動（維持相容）
     try:
         ok = _powershell_start_process(input_cmd)
         return jsonify({

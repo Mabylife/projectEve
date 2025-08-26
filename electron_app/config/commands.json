@@ -145,20 +145,30 @@
     },
 
     {
-      "id": "apps.notion",
-      "name": "App: Notion",
+      "id": "apps.tetr",
+      "name": "App: tetr.io",
       "prefix": "app",
-      "cmds": ["notion"],
-      "action": { "type": "open_shortcut", "name": "Notion.lnk" },
-      "output_ok": "Launched: Notion"
+      "cmds": ["tetr"],
+      "action": { "type": "open_shortcut", "name": "tetr.lnk" },
+      "output_ok": "Launched: tetr.io"
     },
     {
-      "id": "web.github",
-      "name": "Web: GitHub",
-      "prefix": "web",
-      "cmds": ["github"],
-      "action": { "type": "open_url", "url": "https://github.com" },
-      "output_ok": "Opened: GitHub"
+      "id": "zen.search",
+      "name": "Search: Google",
+      "prefix": "zen",
+      "cmds": ["s"],
+      "args_mode": "free",
+      "action": { "type": "function", "name": "search" },
+      "output_ok": "Searching..."
+    },
+    {
+      "id": "zen.auto",
+      "name": "Search: Auto Direct (!bang via DuckDuckGo)",
+      "prefix": "zen",
+      "cmds": [""],
+      "args_mode": "free",
+      "action": { "type": "function", "name": "auto_dir_search" },
+      "output_ok": "Searching (Auto direct)..."
     }
   ]
 }
