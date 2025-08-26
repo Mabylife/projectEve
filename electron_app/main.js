@@ -8,7 +8,6 @@
 const { configManager } = require("./configManager");
 const { app, Tray, Menu, dialog, shell, globalShortcut, nativeImage, ipcMain, BrowserWindow, screen } = require("electron");
 const { initScaleManager } = require("./scaleManager");
-const { initWsBridge } = require("./wsBridge");
 const path = require("path");
 const fs = require("fs");
 const { spawn, exec } = require("child_process");
@@ -280,7 +279,7 @@ function createWindowsIfNeeded() {
   }
 
   // Get alwaysOnTop setting from UI config
-  const uiConfig = configManager.getConfig('ui');
+  const uiConfig = configManager.getConfig("ui");
   const alwaysOnTop = uiConfig?.ui?.alwaysOnTop !== false; // Default to true if not specified
 
   mainWin = new MicaBrowserWindow({
@@ -313,7 +312,7 @@ function createWindowsIfNeeded() {
   else writeLog("WIN", "缺少 primary.html: " + primaryHtml);
 
   // Listen for main window ready
-  mainWin.webContents.once('did-finish-load', () => {
+  mainWin.webContents.once("did-finish-load", () => {
     writeLog("WIN", "主視窗內容載入完成");
     // Send initial configs after window is ready
     if (configManager.isInitialized) {
@@ -350,7 +349,7 @@ function createWindowsIfNeeded() {
   else writeLog("WIN", "缺少 mediaCard.html: " + mediaHtml);
 
   // Listen for media window ready
-  mediaWin.webContents.once('did-finish-load', () => {
+  mediaWin.webContents.once("did-finish-load", () => {
     writeLog("WIN", "媒體視窗內容載入完成");
   });
 
@@ -440,14 +439,14 @@ app.whenReady().then(async () => {
       writeLog("CFG", "UI config updated via new config system");
       latestUiConfig = ui || latestUiConfig;
       updateMediaVisibility();
-      
+
       // Handle scale changes
-      if (ui?.ui?.scale && typeof scaleMgr?.setScale === 'function') {
+      if (ui?.ui?.scale && typeof scaleMgr?.setScale === "function") {
         const newScale = ui.ui.scale;
         writeLog("CFG", `Applying scale change: ${newScale}`);
         scaleMgr.setScale(newScale);
       }
-      
+
       // Handle alwaysOnTop changes
       if (ui?.ui?.alwaysOnTop !== undefined) {
         const alwaysOnTop = ui.ui.alwaysOnTop;
@@ -478,14 +477,14 @@ app.whenReady().then(async () => {
   });
 
   // Apply initial scale from loaded config
-  const initialUiConfig = configManager.getConfig('ui');
+  const initialUiConfig = configManager.getConfig("ui");
   if (initialUiConfig?.ui?.scale && scaleMgr) {
     writeLog("CFG", `Will apply initial scale: ${initialUiConfig.ui.scale}`);
-    
+
     // Apply scale once both windows have finished loading their content
     let mainReady = false;
     let mediaReady = false;
-    
+
     const checkAndApplyScale = () => {
       if (mainReady && mediaReady) {
         scaleMgr.captureBaseBounds();
@@ -493,25 +492,25 @@ app.whenReady().then(async () => {
         writeLog("CFG", `Initial scale applied: ${initialUiConfig.ui.scale}`);
       }
     };
-    
+
     if (mainWin) {
-      mainWin.webContents.once('did-finish-load', () => {
+      mainWin.webContents.once("did-finish-load", () => {
         mainReady = true;
         checkAndApplyScale();
       });
     } else {
       mainReady = true;
     }
-    
+
     if (mediaWin) {
-      mediaWin.webContents.once('did-finish-load', () => {
+      mediaWin.webContents.once("did-finish-load", () => {
         mediaReady = true;
         checkAndApplyScale();
       });
     } else {
       mediaReady = true;
     }
-    
+
     // Fallback: apply after a timeout even if events don't fire
     setTimeout(() => {
       if (!mainReady || !mediaReady) {
@@ -521,27 +520,6 @@ app.whenReady().then(async () => {
       }
     }, 2000);
   }
-
-  // 啟動 WS 橋接：Python → WS → main → IPC → UI
-  const wsUrl = `ws://127.0.0.1:${PY_PORT}/ws`;
-  const ws = initWsBridge({
-    url: wsUrl,
-    getWindows: () => [mainWin, mediaWin],
-    onMediaStatus: (status) => {
-      isPlaying = status === "playing" || status === "paused";
-      updateMediaVisibility();
-    },
-    onConnectChange: (ok) => writeLog("WS", ok ? "connected" : "disconnected"),
-    logger: writeLog,
-  });
-  ws.start();
-
-  app.once("before-quit", () => {
-    try {
-      ws.stop();
-    } catch {}
-  });
-
 });
 
 function hideWindows() {

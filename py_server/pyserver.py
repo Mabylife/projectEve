@@ -656,47 +656,6 @@ async def reload_commands():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-# [新增] WebSocket 端點
-@app.websocket("/ws")
-async def ws_endpoint():
-    ws = websocket._get_current_object()
-    WS_CLIENTS.add(ws)
-    try:
-        # 初次連線：打招呼＋同步一次媒體狀態
-        await ws.send(json.dumps({"type": "hello", "from": "pyserver"}))
-        status, meta = await _best_media_snapshot()
-        await ws.send(
-            json.dumps({
-                "type": "media",
-                "mediaStatus": status,
-                "meta": meta
-            },
-                       ensure_ascii=False))
-        # 接受但忽略客戶端訊息（如需可擴充）
-        while True:
-            try:
-                await websocket.receive()
-            except Exception:
-                # 連線中斷
-                break
-    finally:
-        WS_CLIENTS.discard(ws)
-
-
-async def _ws_broadcast(obj: dict):
-    if not WS_CLIENTS:
-        return
-    text = json.dumps(obj, ensure_ascii=False)
-    stale = []
-    for ws in list(WS_CLIENTS):
-        try:
-            await ws.send(text)
-        except Exception:
-            stale.append(ws)
-    for s in stale:
-        WS_CLIENTS.discard(s)
-
-
 # [新增] 背景任務已移除：現在由 Main 進程定時輪詢，而非 Python 自主推送
 # 這樣頻率更清楚且易於調整
 
