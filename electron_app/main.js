@@ -358,6 +358,10 @@ function createWindowsIfNeeded() {
     if (configManager.isInitialized) {
       setTimeout(() => configManager.sendInitialConfigsToWindows(), 100);
     }
+    // Replay cached data to the main window
+    if (dataHub) {
+      dataHub.replayTo(mainWin);
+    }
   });
 
   mediaWin = new MicaBrowserWindow({
@@ -391,6 +395,10 @@ function createWindowsIfNeeded() {
   // Listen for media window ready
   mediaWin.webContents.once("did-finish-load", () => {
     writeLog("WIN", "媒體視窗內容載入完成");
+    // Replay cached data to the media window
+    if (dataHub) {
+      dataHub.replayTo(mediaWin);
+    }
   });
 
   mainWin.on("close", (e) => {
@@ -410,14 +418,23 @@ function createWindowsIfNeeded() {
 
   if (autoShowFirstToggle) {
     writeLog("WIN_PreShow", "開始預熱視窗");
-    if (mediaWin) mediaWin.show();
-    if (mainWin) mainWin.show();
-    writeLog("WIN_PreShow", "顯示主視窗和媒體視窗");
+    // Wait for windows to be fully created and styled before showing
     setTimeout(() => {
-      if (mainWin) mainWin.hide();
-      if (mediaWin) mediaWin.hide();
-      writeLog("WIN_PreShow", "隱藏主視窗和媒體視窗");
-    }, 100);
+      if (mediaWin) {
+        mediaWin.showInactive(); // Use showInactive to avoid focus issues
+        writeLog("WIN_PreShow", "顯示媒體視窗(無焦點)");
+      }
+      if (mainWin) {
+        mainWin.showInactive(); // Use showInactive to avoid focus issues  
+        writeLog("WIN_PreShow", "顯示主視窗(無焦點)");
+      }
+      // Hide after a slightly longer delay to ensure proper rendering
+      setTimeout(() => {
+        if (mainWin) mainWin.hide();
+        if (mediaWin) mediaWin.hide();
+        writeLog("WIN_PreShow", "隱藏主視窗和媒體視窗");
+      }, 200);
+    }, 50);
   }
 }
 
@@ -458,7 +475,17 @@ app.whenReady().then(async () => {
 
   waitForBackendReady({ port: PY_PORT, maxWaitMs: 20000, intervalMs: 300 }).then((ok) => {
     writeLog("INIT", `Backend health after start: ${ok}`);
-    if (ok) dataHub.refreshAll();
+    if (ok) {
+      dataHub.refreshAll().then(() => {
+        // After refreshing data, replay to any existing windows
+        if (mainWin && !mainWin.isDestroyed()) {
+          dataHub.replayTo(mainWin);
+        }
+        if (mediaWin && !mediaWin.isDestroyed()) {
+          dataHub.replayTo(mediaWin);
+        }
+      });
+    }
   });
 
   app.once("before-quit", () => dataHub.stop());
