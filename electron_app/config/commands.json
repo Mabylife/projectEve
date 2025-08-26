@@ -1,24 +1,164 @@
 {
-  "version": 1,
+  "version": 2,
   "commands": [
     {
-      "id": "open_notepad",
-      "name": "記事本",
-      "action": {
-        "type": "process",
-        "cmd": "notepad.exe",
-        "args": []
-      }
+      "id": "mode.silent",
+      "name": "Power: Silent",
+      "prefix": "mode",
+      "cmds": ["silent", "sil"],
+      "action": { "type": "function", "name": "power_silent" },
+      "output_ok": "Power mode change to silent",
+      "help": "/mode silent | /mode sil"
     },
     {
-      "id": "pause_media",
-      "name": "媒體暫停/播放",
-      "action": {
-        "type": "key",
-        "keys": [
-          "mediaPlayPause"
-        ]
-      }
+      "id": "mode.balanced",
+      "name": "Power: Balanced",
+      "prefix": "mode",
+      "cmds": ["balanced", "bal"],
+      "action": { "type": "function", "name": "power_balanced" },
+      "output_ok": "Power mode change to balanced",
+      "help": "/mode balanced | /mode bal"
+    },
+    {
+      "id": "mode.turbo",
+      "name": "Power: Turbo",
+      "prefix": "mode",
+      "cmds": ["turbo", "tur"],
+      "action": { "type": "function", "name": "power_turbo" },
+      "output_ok": "Power mode change to turbo",
+      "help": "/mode turbo | /mode tur"
+    },
+
+    {
+      "id": "media.toggle",
+      "name": "Media: Toggle",
+      "prefix": "m",
+      "cmds": ["p", "toggle"],
+      "action": { "type": "function", "name": "media_toggle" },
+      "output_ok": "Media toggled"
+    },
+    {
+      "id": "media.next",
+      "name": "Media: Next",
+      "prefix": "m",
+      "cmds": ["next"],
+      "action": { "type": "function", "name": "media_next" },
+      "output_ok": "Media next"
+    },
+    {
+      "id": "media.prev",
+      "name": "Media: Previous",
+      "prefix": "m",
+      "cmds": ["previous", "prev"],
+      "action": { "type": "function", "name": "media_prev" },
+      "output_ok": "Media previous"
+    },
+    {
+      "id": "media.stop",
+      "name": "Media: Stop",
+      "prefix": "m",
+      "cmds": ["stop"],
+      "action": { "type": "function", "name": "media_stop" },
+      "output_ok": "Media stopped"
+    },
+    {
+      "id": "media.immersive",
+      "name": "Media: Toggle Immersive",
+      "prefix": "m",
+      "cmds": ["imm", "immersive"],
+      "action": { "type": "function", "name": "toggle_immersive" },
+      "output_ok": "Media toggled immersive mode"
+    },
+
+    {
+      "id": "bin.open",
+      "name": "Recycle Bin: Open",
+      "prefix": "bin",
+      "cmds": ["open"],
+      "action": { "type": "function", "name": "open_bin" },
+      "output_ok": "opened recycle bin"
+    },
+    {
+      "id": "bin.clean",
+      "name": "Recycle Bin: Clean",
+      "prefix": "bin",
+      "cmds": ["clean"],
+      "action": { "type": "function", "name": "clean_bin" },
+      "output_ok": "cleaned recycle bin"
+    },
+
+    {
+      "id": "eve.autofocus.on",
+      "name": "Eve: Auto Focus On",
+      "prefix": "eve",
+      "cmds": ["autofocus on"],
+      "action": { "type": "function", "name": "autofocus_on" },
+      "output_ok": "Auto focus on"
+    },
+    {
+      "id": "eve.autofocus.off",
+      "name": "Eve: Auto Focus Off",
+      "prefix": "eve",
+      "cmds": ["autofocus off"],
+      "action": { "type": "function", "name": "autofocus_off" },
+      "output_ok": "Auto focus off"
+    },
+    {
+      "id": "eve.clean",
+      "name": "Eve: Clear Output",
+      "prefix": "eve",
+      "cmds": ["clean"],
+      "action": { "type": "function", "name": "clear_output" },
+      "output_ok": "Output cleared"
+    },
+    {
+      "id": "eve.clean.full",
+      "name": "Eve: Clear Output (Full)",
+      "prefix": "eve",
+      "cmds": ["clean full"],
+      "action": { "type": "function", "name": "clear_output_full" },
+      "output_ok": "Full output cleared"
+    },
+    {
+      "id": "eve.quote.copy",
+      "name": "Eve: Quote Copy",
+      "prefix": "eve",
+      "cmds": ["quote get", "quote copy"],
+      "action": { "type": "function", "name": "quote_copy" },
+      "output_ok": ""
+    },
+    {
+      "id": "eve.quote.change",
+      "name": "Eve: Quote Change",
+      "prefix": "eve",
+      "cmds": ["quote change"],
+      "action": { "type": "function", "name": "quote_change" },
+      "output_ok": "Quote changed"
+    },
+    {
+      "id": "eve.reconnect",
+      "name": "Eve: Reconnect",
+      "prefix": "eve",
+      "cmds": ["reconnect", "rc"],
+      "action": { "type": "function", "name": "reconnect" },
+      "output_ok": "Reconnecting..."
+    },
+
+    {
+      "id": "apps.notion",
+      "name": "App: Notion",
+      "prefix": "app",
+      "cmds": ["notion"],
+      "action": { "type": "open_shortcut", "name": "Notion.lnk" },
+      "output_ok": "Launched: Notion"
+    },
+    {
+      "id": "web.github",
+      "name": "Web: GitHub",
+      "prefix": "web",
+      "cmds": ["github"],
+      "action": { "type": "open_url", "url": "https://github.com" },
+      "output_ok": "Opened: GitHub"
     }
   ]
 }

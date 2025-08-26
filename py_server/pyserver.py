@@ -1,5 +1,7 @@
+# pyserver.py
+
 from quart_cors import cors
-from quart import Quart, jsonify, request, websocket  # [新增] websocket
+from quart import Quart, jsonify, request
 import httpx
 import math
 import re
@@ -9,13 +11,11 @@ import asyncio
 import contextlib
 import subprocess
 import psutil
-import ctypes
 import urllib.parse
-import os  # [新增]
-import json  # [新增]
-import sys  # [新增]
-from pathlib import Path  # [新增]
-from ctypes import wintypes
+import os
+import json
+import sys
+from pathlib import Path
 
 try:
     from winrt.windows.media.control import (
@@ -30,13 +30,12 @@ except ImportError:
 
 HOST = "0.0.0.0"
 PORT = 54321
-
 should_log = False  # 設為 True 可開啟詳細日誌
 
 
 def log(msg):
     if should_log:
-        log(f"[LOG] {msg}")
+        print(f"[LOG] {msg}")
 
 
 def create_app() -> Quart:
@@ -47,12 +46,12 @@ def create_app() -> Quart:
 
 app = create_app()
 
-# [新增] WebSocket 客戶端集合與命令快取
-WS_CLIENTS = set()
-LOADED_COMMANDS = {"version": 1, "commands": []}
+# Commands cache (v2 schema)
+LOADED_COMMANDS = {"version": 2, "commands": []}
+CMD_INDEX = {}  # prefix(lower) -> list[command]
 
 
-# [新增] 路徑解析：commands.json 所在目錄
+# ---------- 路徑處理 ----------
 def _exe_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
@@ -65,7 +64,6 @@ def _resolve_config_dir() -> Path:
         p = Path(env)
         p.mkdir(parents=True, exist_ok=True)
         return p
-    # 嘗試常見結構：<repo>/electron_app/config 或 <repo>/config
     start = _exe_dir()
     candidates = [
         start.parent.parent / "config",  # electron_app/config
@@ -82,8 +80,11 @@ def _resolve_config_dir() -> Path:
 
 CONFIG_DIR = _resolve_config_dir()
 COMMANDS_FILE = CONFIG_DIR / "commands.json"
+SHORTCUTS_DIR = Path(
+    os.environ.get("EVE_SHORTCUTS_DIR", CONFIG_DIR / "shortcuts"))
 
 
+# ---------- 媒體工具 ----------
 def _status_name(status_enum):
     if PlaybackStatus is None:
         return str(status_enum)
@@ -99,9 +100,6 @@ def _status_name(status_enum):
 
 
 def _normalize_media_status(name: str) -> str:
-    """
-    統一回傳 playing/paused/stopped 三種狀態，配合 Electron main.js 的自動顯示規則
-    """
     if not name:
         return "stopped"
     n = name.strip().lower()
@@ -109,15 +107,10 @@ def _normalize_media_status(name: str) -> str:
         return "playing"
     if n.startswith("pause"):
         return "paused"
-    # Changing / Opened / Stopped / Closed -> stopped
     return "stopped"
 
 
 async def _gather_sessions_detail():
-    """
-    回傳 list: [{idx, statusName, title, rawStatus, score}]
-    score 用來排序挑選最佳 session
-    """
     details = []
     if MediaManager is None:
         return details
@@ -130,7 +123,6 @@ async def _gather_sessions_detail():
                 playback = s.get_playback_info()
                 status_enum = getattr(playback, "playback_status", None)
                 title = getattr(info, "title", None)
-                # 排序分數：Playing 4 > Paused 3 > Changing 2 > Stopped 1 > 其他 0
                 score = 0
                 if PlaybackStatus is not None:
                     if status_enum == PlaybackStatus.PLAYING:
@@ -153,7 +145,7 @@ async def _gather_sessions_detail():
                     "score":
                     score,
                     "session":
-                    s,  # 不序列化，用於後續選擇
+                    s,
                 })
             except Exception as e:
                 log(f"_gather_sessions_detail: session {idx} error: {e}")
@@ -163,10 +155,6 @@ async def _gather_sessions_detail():
 
 
 async def _best_media_snapshot():
-    """
-    取分數最高的媒體 session，回傳 (normalized_status, meta_dict)
-    meta_dict 至少包含 { title, statusName }
-    """
     details = await _gather_sessions_detail()
     if not details:
         return "stopped", {"title": None, "statusName": None}
@@ -178,29 +166,11 @@ async def _best_media_snapshot():
     }
 
 
-def open_url(url: str):
-    # 確保整體被引號包起來避免空白被拆
-    try:
-        subprocess.run(["powershell", "-Command", f'Start-Process "{url}"'],
-                       timeout=5)
-        log(f"Opened URL: {url}")
-        return True
-    except Exception as e:
-        log(f"Open URL error: {e}")
-        return False
-
-
-# 只需要這兩個常數
+# ---------- 系統動作 primitive ----------
 KEYEVENTF_KEYUP = 0x0002
 
 
 def _parse_vk_list(args_or_list):
-    """
-    支援：
-    - send_vk(0x11, 0x10, 0x7F)
-    - send_vk([0x11, 0x10, 0x7F])
-    - send_vk("0x11", "0x10", "0x7F")
-    """
     if len(args_or_list) == 1 and isinstance(args_or_list[0], (list, tuple)):
         items = list(args_or_list[0])
     else:
@@ -216,16 +186,6 @@ def _parse_vk_list(args_or_list):
 
 
 def send_vk(*vk_codes, mode="combo", inter_key_delay_ms=0, hold_ms=50):
-    """
-    最簡版虛擬鍵輸入：
-    - 直接傳虛擬鍵碼即可，例如：send_vk(0x11, 0x10, 0x7F)
-    - mode:
-      - "combo": 依序按下所有鍵 → 停留 hold_ms → 反向全部放開（組合鍵）
-      - "sequence": 每鍵：按下→放開→換下一鍵（連續點擊）
-    - inter_key_delay_ms: 鍵與鍵之間的延遲（毫秒）
-    - hold_ms: combo 模式，全部按下後的停留時間（毫秒）
-    注意：本版本不處理 EXTENDED flag，某些鍵（如媒體鍵、方向鍵）在部分環境可能需要 EXTENDED 才可靠。
-    """
     try:
         import time
         import ctypes
@@ -234,7 +194,6 @@ def send_vk(*vk_codes, mode="combo", inter_key_delay_ms=0, hold_ms=50):
         codes = _parse_vk_list(vk_codes)
 
         def key_down(vk):
-            # 不使用 EXTENDED flag，最簡實作
             user32.keybd_event(vk, 0, 0, 0)
 
         def key_up(vk):
@@ -253,7 +212,6 @@ def send_vk(*vk_codes, mode="combo", inter_key_delay_ms=0, hold_ms=50):
                     time.sleep(inter_key_delay_ms / 1000.0)
             return True
         else:
-            # 預設 combo
             for vk in codes:
                 key_down(vk)
                 if inter_key_delay_ms:
@@ -266,16 +224,177 @@ def send_vk(*vk_codes, mode="combo", inter_key_delay_ms=0, hold_ms=50):
                     time.sleep(inter_key_delay_ms / 1000.0)
             return True
     except Exception as e:
-        log(f"[LOG] send_vk error: {e}")
+        log(f"send_vk error: {e}")
         return False
 
 
+def _powershell_start_process(target: str, timeout=4) -> bool:
+    try:
+        subprocess.run(
+            ["powershell", "-Command", f'Start-Process -FilePath "{target}"'],
+            timeout=timeout)
+        return True
+    except Exception as e:
+        log(f"Start-Process error: {e}")
+        return False
+
+
+def open_url(url: str):
+    try:
+        ok = _powershell_start_process(url, timeout=5)
+        log(f"Opened URL: {url} ok={ok}")
+        return ok
+    except Exception as e:
+        log(f"Open URL error: {e}")
+        return False
+
+
+def open_shortcut(name: str):
+    try:
+        name = name.strip()
+        if not name.lower().endswith(".lnk"):
+            name = name + ".lnk"
+        base = SHORTCUTS_DIR.resolve()
+        path = (base / name).resolve()
+        if not str(path).lower().endswith(".lnk"):
+            return False
+        # 防止目錄穿越
+        if base not in path.parents and path != base:
+            return False
+        if not path.exists():
+            return False
+        return _powershell_start_process(str(path), timeout=5)
+    except Exception as e:
+        log(f"open_shortcut error: {e}")
+        return False
+
+
+# ---------- commands.json v2 載入 & 索引 ----------
+def _normalize_spaces(s: str) -> str:
+    return " ".join((s or "").split())
+
+
+def _validate_commands_v2(obj) -> bool:
+    try:
+        if not obj or not isinstance(obj, dict):
+            return False
+        if int(obj.get("version", 0)) != 2:
+            return False
+        items = obj.get("commands", [])
+        if not isinstance(items, list):
+            return False
+        for c in items:
+            if not isinstance(c, dict):
+                return False
+            if not c.get("id") or not c.get("prefix") or not c.get(
+                    "cmds") or not c.get("action"):
+                return False
+            if not isinstance(c["cmds"], list) or not c["cmds"]:
+                return False
+            a = c["action"]
+            if not isinstance(a, dict):
+                return False
+            t = a.get("type")
+            if t not in ("function", "send_vk", "open_shortcut", "open_url"):
+                return False
+            if t == "function" and not a.get("name"):
+                return False
+            if t == "send_vk" and not a.get("keys"):
+                return False
+            if t == "open_shortcut" and not a.get("name"):
+                return False
+            if t == "open_url" and not a.get("url"):
+                return False
+        return True
+    except Exception:
+        return False
+
+
+def _rebuild_cmd_index():
+    global CMD_INDEX
+    CMD_INDEX = {}
+    items = LOADED_COMMANDS.get("commands", [])
+    for c in items:
+        if c.get("enabled") is False:
+            continue
+        p = str(c.get("prefix", "")).strip().lower()
+        if not p:
+            continue
+        c["_cmds_norm"] = [
+            _normalize_spaces(x).lower() for x in c.get("cmds", [])
+        ]
+        CMD_INDEX.setdefault(p, []).append(c)
+
+
+def _load_commands_from_disk():
+    global LOADED_COMMANDS
+    try:
+        if COMMANDS_FILE.exists():
+            with open(COMMANDS_FILE, "r", encoding="utf-8") as f:
+                obj = json.load(f)
+            if _validate_commands_v2(obj):
+                LOADED_COMMANDS = obj
+                _rebuild_cmd_index()
+                log(f"Commands loaded: {sum(len(v) for v in CMD_INDEX.values())} items across {len(CMD_INDEX)} prefixes"
+                    )
+                return True
+            else:
+                log("commands.json validation failed (expect version=2)")
+                LOADED_COMMANDS = {"version": 2, "commands": []}
+                CMD_INDEX.clear()
+                return False
+        else:
+            LOADED_COMMANDS = {"version": 2, "commands": []}
+            CMD_INDEX.clear()
+            return False
+    except Exception as e:
+        log(f"load commands error: {e}")
+        LOADED_COMMANDS = {"version": 2, "commands": []}
+        CMD_INDEX.clear()
+        return False
+
+
+def _list_prefixes():
+    return sorted(list(CMD_INDEX.keys()))
+
+
+def _build_help_all():
+    prefixes = _list_prefixes()
+    lines = []
+    if prefixes:
+        lines.append("Available prefixes:")
+        for p in prefixes:
+            cnt = len(CMD_INDEX.get(p, []))
+            lines.append(f"- {p} ({cnt} commands)  try: /{p} help")
+    else:
+        lines.append("No custom commands configured.")
+    # 未加 prefix 行為說明（維持相容：Win+R 啟動 + 支援數學運算）
+    lines.append("")
+    lines.append("No prefix:")
+    lines.append("- Execute as Win+R (Start-Process)")
+    lines.append("- Or enter a math expression to calculate")
+    return lines
+
+
+def _build_help_for_prefix(prefix: str):
+    p = (prefix or "").strip().lower()
+    items = CMD_INDEX.get(p, [])
+    if not items:
+        return [f"No commands under prefix: {prefix}"]
+    lines = [f"Commands for /{p}:"]
+    for c in items:
+        cmds = " | ".join(c.get("cmds", []))
+        desc = c.get("help") or c.get("name") or ""
+        lines.append(f"- {cmds}" + (f" — {desc}" if desc else ""))
+    return lines
+
+
+# ---------- HTTP 端點 ----------
 @app.route("/media/debug")
 async def media_debug():
     if MediaManager is None:
         return jsonify({"winrt": False, "sessions": []})
     details = await _gather_sessions_detail()
-    # 去掉 session 物件不可序列化
     out = []
     for d in details:
         out.append({
@@ -291,7 +410,6 @@ async def media_debug():
 async def get_disk():
     drives = ["C:", "D:", "E:"]
     result = {}
-    log("Disk API called")
     for drive in drives:
         try:
             usage = psutil.disk_usage(drive + "\\")
@@ -300,13 +418,11 @@ async def get_disk():
         except Exception as e:
             result[drive] = "N/A"
             log(f"Disk error for {drive}: {e}")
-    log(f"Disk result: {result}")
     return jsonify(result)
 
 
 @app.route("/recyclebin")
 async def get_recyclebin():
-    log("Recyclebin API called")
     ps_script = """
 $shell = New-Object -ComObject Shell.Application
 $recycleBin = $shell.Namespace(10)
@@ -326,13 +442,11 @@ for ($i=0; $i -lt $recycleBin.Items().Count; $i++) { $size += $recycleBin.Items(
     except Exception as e:
         mb = 0
         log(f"Recyclebin error: {e}")
-    log(f"Recyclebin MB: {mb}")
     return jsonify({"recyclebinMB": mb})
 
 
 @app.route("/dailyquote")
 async def get_dailyquote():
-    log("Dailyquote API called (insecure fetch)")
     try:
         async with httpx.AsyncClient(timeout=5, verify=False) as client:
             resp = await client.get("https://api.quotable.io/quotes/random")
@@ -353,7 +467,6 @@ async def get_dailyquote():
             "error": str(e),
         }
         log(f"Dailyquote error: {e}")
-    log(f"Dailyquote result: {result}")
     return jsonify(result)
 
 
@@ -361,7 +474,6 @@ async def get_dailyquote():
 async def get_media():
     result_list = []
     if MediaManager is None:
-        log("MediaManager not available (winrt not installed)")
         return jsonify([])
     try:
         sessions_manager = await MediaManager.request_async()
@@ -396,9 +508,8 @@ async def get_media():
                                 reader = DataReader.from_buffer(read_result)
                                 bytes_data = bytes(
                                     reader.read_bytes(read_result.length))
-                                thumbnail_b64 = ("data:image/png;base64," +
-                                                 base64.b64encode(bytes_data).
-                                                 decode("utf-8"))
+                                thumbnail_b64 = "data:image/png;base64," + base64.b64encode(
+                                    bytes_data).decode("utf-8")
                             except Exception:
                                 thumbnail_b64 = None
                             with contextlib.suppress(Exception):
@@ -412,17 +523,12 @@ async def get_media():
                 res = {
                     "title": getattr(info, "title", None),
                     "artist": getattr(info, "artist", None),
-                    "album": getattr(info, "album_title",
-                                     None),  # Additional useful property
+                    "album": getattr(info, "album_title", None),
                     "state":
                     _status_name(state) if state is not None else None,
                     "position": position,
                     "duration": duration,
                     "thumbnail": thumbnail_b64,
-                    # Future extensibility - these could be added when needed:
-                    # "album_artist": getattr(info, "album_artist", None),
-                    # "track_number": getattr(info, "track_number", None),
-                    # "subtitle": getattr(info, "subtitle", None),
                 }
                 result_list.append(res)
             except Exception as e:
@@ -433,171 +539,176 @@ async def get_media():
     return jsonify(result_list)
 
 
+# ---------- 內建 function 對應 ----------
+def _run_builtin_function(name: str):
+    name = (name or "").strip().lower()
+    flags = {}
+    ok = False
+
+    if name == "power_silent":
+        ok = send_vk(0x11, 0x10, 0x12, 0x7F, mode="combo")
+        flags = {"isChangePowerMode": True, "mode": "silent"} if ok else {}
+    elif name == "power_balanced":
+        ok = send_vk(0x11, 0x10, 0x12, 0x80, mode="combo")
+        flags = {"isChangePowerMode": True, "mode": "balanced"} if ok else {}
+    elif name == "power_turbo":
+        ok = send_vk(0x11, 0x10, 0x12, 0x81, mode="combo")
+        flags = {"isChangePowerMode": True, "mode": "turbo"} if ok else {}
+
+    elif name == "media_toggle":
+        ok = send_vk(0xB3)
+    elif name == "media_next":
+        ok = send_vk(0xB0)
+    elif name == "media_prev":
+        ok = send_vk(0xB1)
+    elif name == "media_stop":
+        ok = send_vk(0xB2)
+
+    elif name == "toggle_immersive":
+        ok = True
+        flags = {"isToggleImmMode": True}
+
+    elif name == "open_bin":
+        ok = _powershell_start_process("shell:RecycleBinFolder")
+    elif name == "clean_bin":
+        try:
+            start = time.time()
+            subprocess.run(
+                ["powershell", "-Command", "Clear-RecycleBin -Force"],
+                timeout=8)
+            ok = True
+            flags = {"isMakeRecycleBinZero": True}
+            log(f"Recycle bin cleaned in {round(time.time() - start, 2)}s")
+        except Exception as e:
+            ok = False
+            log(f"clean_bin error: {e}")
+
+    elif name == "autofocus_on":
+        ok = True
+        flags = {"isAutoFocusOn": True}
+    elif name == "autofocus_off":
+        ok = True
+        flags = {"isAutoFocusOn": False}
+
+    elif name == "clear_output":
+        ok = True
+        flags = {"isClearOutput": True, "isFullClear": False}
+    elif name == "clear_output_full":
+        ok = True
+        flags = {"isClearOutput": True, "isFullClear": True}
+
+    elif name == "quote_copy":
+        ok = True
+        flags = {"isCopiedQuote": True}
+    elif name == "quote_change":
+        ok = True
+        flags = {"isChangeQuote": True}
+
+    elif name == "reconnect":
+        ok = True
+        flags = {"isReconnect": True}
+
+    else:
+        ok = False
+
+    return ok, flags
+
+
+def _format_output(val,
+                   default_text_ok: str = None,
+                   default_text_fail: str = None,
+                   ok: bool = True):
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str):
+        return [val]
+    # 沒提供時，回傳合理預設
+    if ok:
+        return [default_text_ok or "Done"]
+    else:
+        return [default_text_fail or "Failed"]
+
+
+def _match_command_from_json(prefix: str, cmd_text: str):
+    p = (prefix or "").strip().lower()
+    rest = _normalize_spaces(cmd_text).lower()
+    items = CMD_INDEX.get(p, [])
+    for c in items:
+        if rest in c.get("_cmds_norm", []):
+            return c
+    return None
+
+
+# ---------- 終端指令 ----------
 @app.route("/terminal/run", methods=["POST"])
 async def terminal_run():
     data = await request.get_json()
-    input_cmd = data.get("input", "").strip()
+    input_cmd = (data.get("input", "") or "").strip()
     log(f"Terminal API called: input={input_cmd}")
 
+    # 解析 prefix 格式：/prefix xxx 或 -prefix xxx
     prefix_match = re.match(r"^[/-](\w+)\s*(.*)$", input_cmd)
     if prefix_match:
-        prefix = prefix_match.group(1)
-        cmd = prefix_match.group(2).strip()
-        output, extra = [], {}
-        success = True
+        prefix = prefix_match.group(1).strip().lower()
+        cmd = (prefix_match.group(2) or "").strip()
 
-        if prefix == "help":
-            output = ["Available prefixes: mode, m, bin, eve, zen"]
+        # /help → 顯示所有 prefix
+        if prefix == "help" and (not cmd or cmd.lower() in ("", "help", "?")):
+            output = _build_help_all()
+            return jsonify({"output": output, "success": True})
 
-        elif prefix == "mode":
+        # /{prefix} help → 顯示該 prefix 下的所有命令
+        if cmd.lower() in ("help", "?"):
+            output = _build_help_for_prefix(prefix)
+            return jsonify({"output": output, "success": True})
 
-            if cmd == "silent" or cmd == "sil":
-                ok = send_vk(0x11, 0x10, 0x12, 0x7F, mode="combo")
-                if ok:
-                    output = [f"Power mode change to silent"]
-                    extra = {"isChangePowerMode": True, "mode": "silent"}
-            elif cmd == "balanced" or cmd == "bal":
-                ok = send_vk(0x11, 0x10, 0x12, 0x80, mode="combo")
-                if ok:
-                    output = [f"Power mode change to balanced"]
-                    extra = {"isChangePowerMode": True, "mode": "balanced"}
-            elif cmd == "turbo" or cmd == "tur":
-                ok = send_vk(0x11, 0x10, 0x12, 0x81, mode="combo")
-                if ok:
-                    output = [f"Power mode change to turbo"]
-                    extra = {"isChangePowerMode": True, "mode": "turbo"}
-                else:
-                    output = [f"Unknown mode: {cmd}"]
-                    success = False
-            elif cmd in ("help", "？"):
-                output = [
-                    "Available commands: silent/sil, balanced/bal, turbo/tur"
-                ]
+        # JSON 匹配
+        cmd_def = _match_command_from_json(prefix, cmd)
+        if cmd_def:
+            action = cmd_def.get("action", {})
+            t = (action.get("type") or "").lower()
+            ok = False
+            flags = {}
+            if t == "function":
+                ok, flags = _run_builtin_function(action.get("name"))
+            elif t == "send_vk":
+                keys = action.get("keys", [])
+                mode = action.get("mode", "combo")
+                inter = int(action.get("inter_key_delay_ms", 0) or 0)
+                hold = int(action.get("hold_ms", 50) or 50)
+                ok = send_vk(keys,
+                             mode=mode,
+                             inter_key_delay_ms=inter,
+                             hold_ms=hold)
+            elif t == "open_shortcut":
+                ok = open_shortcut(action.get("name", ""))
+            elif t == "open_url":
+                ok = open_url(action.get("url", ""))
             else:
-                output = [f"Unknown command for mode prefix: {cmd}"]
-                success = False
+                ok = False
 
-        elif prefix == "m":
+            output = _format_output(
+                cmd_def.get("output_ok" if ok else "output_fail"),
+                default_text_ok=cmd_def.get("name") or "Done",
+                default_text_fail="Failed",
+                ok=ok)
+            res = {"output": output, "success": bool(ok)}
+            res.update(flags)
+            return jsonify(res)
 
-            if cmd == "p" or cmd == "toggle":
-                ok = send_vk(0xB3)
-                if ok:
-                    output = [f"Media toggled"]
-            elif cmd == "next":
-                ok = send_vk(0xB0)
-                if ok:
-                    output = [f"Media next"]
-            elif cmd == "previous" or cmd == "prev":
-                ok = send_vk(0xB1)
-                if ok:
-                    output = [f"Media previous"]
-            elif cmd == "stop":
-                ok = send_vk(0xB2)
-                if ok:
-                    output = [f"Media stopped"]
-            elif cmd == "imm" or cmd == "immersive":
-                output = [f"Media toggled immersive mode"]
-                extra = {"isToggleImmMode": True}
-            elif cmd in ("help", "？"):
-                output = [
-                    "Available commands: p/toggle, next, previous/prev, stop, immersive/imm"
-                ]
-            else:
-                output = [f"Unknown command for mode prefix: {cmd}"]
-                success = False
+        # 如果指定了 prefix，但未命中 JSON，落回舊的「未知命令」訊息
+        return jsonify({
+            "output": [f"Unknown command for {prefix} prefix: {cmd}"],
+            "success":
+            False
+        })
 
-        elif prefix == "bin":
-            if cmd == "open":
-                try:
-                    subprocess.run(
-                        [
-                            "powershell",
-                            "-Command",
-                            'Start-Process -FilePath "shell:RecycleBinFolder"',
-                        ],
-                        timeout=4,
-                    )
-                    output = ["opened recycle bin"]
-                except Exception as e:
-                    output = [f"Failed to open recycle bin: {e}"]
-                    success = False
-            elif cmd == "clean":
-                try:
-                    start = time.time()
-                    subprocess.run(
-                        ["powershell", "-Command", "Clear-RecycleBin -Force"])
-                    elapsed = round(time.time() - start, 2)
-                    output = [f"cleaned recycle bin after {elapsed}s"]
-                    extra = {"isMakeRecycleBinZero": True}
-                except Exception as e:
-                    output = [f"Failed to clean recycle bin: {e}"]
-                    success = False
-            elif cmd in ("help", "？"):
-                output = ["Available commands: open, clean"]
-            else:
-                output = [f"Unknown command for bin prefix: {cmd}"]
-                success = False
-        elif prefix == "eve":
-            if cmd == "autofocus off":
-                output = ["Auto focus off"]
-                extra = {"isAutoFocusOn": False}
-            elif cmd == "autofocus on":
-                output = ["Auto focus on"]
-                extra = {"isAutoFocusOn": True}
-            elif cmd == "clean":
-                output = ["Output cleared"]
-                extra = {"isClearOutput": True, "isFullClear": False}
-            elif cmd == "clean full":
-                output = ["Full output cleared"]
-                extra = {"isClearOutput": True, "isFullClear": True}
-            elif cmd in ("quote get", "quote copy"):
-                output = [""]
-                extra = {"isCopiedQuote": True}
-            elif cmd == "quote change":
-                output = ["Quote changed"]
-                extra = {"isChangeQuote": True}
-            elif cmd in ("reconnect", "rc"):
-                output = ["Reconnecting..."]
-                extra = {"isReconnect": True}
-            elif cmd in ("help", "？"):
-                output = [
-                    "Available commands: autofocus on/off, clean, clean full, quote copy/get/change"
-                ]
-            else:
-                output = [f"Unknown command for eve prefix: {cmd}"]
-                success = False
-        elif prefix == "zen":
-            if cmd.startswith("s "):
-                query = cmd[2:].strip()
-                if not query:
-                    output = ["No search query"]
-                    success = False
-                else:
-                    encoded = urllib.parse.quote_plus(query)
-                    ok = open_url(f"https://www.google.com/search?q={encoded}")
-                    output = [f"Searching: {query}"]
-                    success = success and ok
-            elif cmd in ("help", "？"):
-                output = [
-                    "Usage:",
-                    "-zen s <keywords>",
-                    "-zen <keywords>",
-                ]
-            else:
-                query = cmd
-                encoded = urllib.parse.quote_plus(query)
-                ok = open_url(f"https://duckduckgo.com/?q=!{encoded}")
-                output = [f"Searching (Auto direct): {query}"]
-                success = success and ok
-        else:
-            output = [f"Unknown custom prefix: {prefix}"]
-            success = False
+    # 無 prefix 情況：支援頂層 help
+    if input_cmd.lower() in ("help", "-help", "/help", "?"):
+        output = _build_help_all()
+        return jsonify({"output": output, "success": True})
 
-        result = {"output": output, "success": success}
-        result.update(extra)
-        log(f"Terminal run result: {result}")
-        return jsonify(result)
-
+    # 數學運算白名單
     math_expr = re.compile(r"^[0-9+\-*/^().\s]+$")
     if math_expr.match(input_cmd) and input_cmd:
         try:
@@ -608,58 +719,39 @@ async def terminal_run():
                 "output": [f"Error in calculation: {e}"],
                 "success": False
             }
-        log(f"Terminal math result: {result}")
         return jsonify(result)
 
+    # 預設：Win+R 啟動（維持相容）
     try:
-        subprocess.run(
-            [
-                "powershell", "-Command",
-                f'Start-Process -FilePath "{input_cmd}"'
-            ],
-            timeout=4,
-        )
-        result = {"output": [f"Launched: {input_cmd}"], "success": True}
-    except Exception as e:
+        ok = _powershell_start_process(input_cmd)
+        result = {
+            "output": [f"Launched: {input_cmd}"]
+            if ok else [f"Failed to launch: {input_cmd}"],
+            "success":
+            ok
+        }
+    except Exception:
         result = {
             "output": [f"Failed to launch: {input_cmd}"],
             "success": False
         }
-    log(f"Terminal Win+R result: {result}")
     return jsonify(result)
 
 
-# [新增] 簡易健康檢查
+# 簡易健康檢查
 @app.route("/health")
 async def health():
     return jsonify({"ok": True})
 
 
-# [新增] reload-commands：接到通知後重讀 commands.json（目前伺服端不使用，先保存在 LOADED_COMMANDS）
+# 重新載入 commands
 @app.route("/reload-commands", methods=["POST"])
 async def reload_commands():
-    global LOADED_COMMANDS
-    try:
-        if COMMANDS_FILE.exists():
-            with open(COMMANDS_FILE, "r", encoding="utf-8") as f:
-                LOADED_COMMANDS = json.load(f)
-        else:
-            LOADED_COMMANDS = {"version": 1, "commands": []}
-        # 可選：把重新載入訊息廣播給 WS 客戶端
-        await _ws_broadcast({
-            "type": "commands",
-            "count": len(LOADED_COMMANDS.get("commands", []))
-        })
-        return jsonify({"ok": True})
-    except Exception as e:
-        log(f"reload-commands error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+    ok = _load_commands_from_disk()
+    return jsonify({"ok": ok})
 
 
-# [新增] 背景任務已移除：現在由 Main 進程定時輪詢，而非 Python 自主推送
-# 這樣頻率更清楚且易於調整
-
-
+# ---------- lifecycle ----------
 async def main():
     shutdown_event = asyncio.Event()
 
@@ -672,21 +764,14 @@ async def main():
     async def shutdown_trigger():
         await shutdown_event.wait()
 
-    # [新增] 啟動前建立背景任務
     @app.before_serving
     async def _startup():
         try:
-            # 預先讀取 commands.json
-            if COMMANDS_FILE.exists():
-                with open(COMMANDS_FILE, "r", encoding="utf-8") as f:
-                    global LOADED_COMMANDS
-                    LOADED_COMMANDS = json.load(f)
+            _load_commands_from_disk()
         except Exception as e:
             log(f"load commands at startup error: {e}")
         app.background_tasks = set()
-        # 移除 media watchdog - 現在由 Main 進程定時輪詢
-        log("Background tasks started (media polling removed, handled by Main)."
-            )
+        log("Background tasks started (media polling handled by Main).")
 
     @app.after_serving
     async def _cleanup():

@@ -345,7 +345,7 @@
             if (res.data.isReconnect) {
               api.refreshAll();
             }
-            if (res.data.isMakeRecycleBinZero) {
+            if (res.data.isRefreshRecycleBin) {
               // Refresh recycle bin status
               api.refreshAll();
             }
