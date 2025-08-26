@@ -59,41 +59,37 @@ def _exe_dir() -> Path:
     return Path(__file__).parent
 
 
-def _resolve__electron_app_dir() -> Path:
+def _resolve_config_dir() -> Path:
+    # 1) 明確指定：最可靠
     env = os.environ.get("EVE_CONFIG_DIR")
     if env:
         p = Path(env)
         p.mkdir(parents=True, exist_ok=True)
+        log(f"CONFIG_DIR from EVE_CONFIG_DIR={p}")
         return p
 
+    # 2) 根據 exe 所在位置嘗試常見結構
     start = _exe_dir()
-
     candidates = [
-        # 典型：從 repo 根目錄執行 py_server/pyserver.py
-        start.parent / "electron_app",  # <repo>/electron_app
-        # 典型：從 electron_app/servers/py 打包（或直接在該層執行）
-        start.parent.parent /
-        "electron_app",  # <repo>/electron_app/config 於 start=e.a/servers/py
-        # 其他可能：往上一層或兩層再找 electron_app/config
-        start.parent.parent / "electron_app",
-        start.parent.parent.parent / "electron_app",
+        start / "config",  # 與 exe 同層的 config（最常用）
+        start.parent / "config",  # 上一層的 config
+        start.parent.parent / "config",  # 兩層上的 config（原本假設 exe 在 servers/py/）
     ]
-
     for c in candidates:
-        try:
-            if c.exists():
-                return c
-        except Exception:
-            pass
+        if c.exists():
+            log(f"CONFIG_DIR from candidates hit: {c}")
+            return c
 
+    # 3) fallback：在 exe 旁新建 config
     fallback = start / "config"
     fallback.mkdir(parents=True, exist_ok=True)
+    log(f"CONFIG_DIR fallback created: {fallback}")
     return fallback
 
 
-CONFIG_DIR = _resolve__electron_app_dir()
-COMMANDS_FILE = CONFIG_DIR / "config" / "commands.json"
-SHORTCUTS_DIR = CONFIG_DIR / "shortcuts"
+CONFIG_DIR = _resolve_config_dir()
+COMMANDS_FILE = CONFIG_DIR / "commands.json"
+SHORTCUTS_DIR = CONFIG_DIR.parent / "shortcuts"
 
 
 # ---------- 媒體工具 ----------

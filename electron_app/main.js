@@ -1,9 +1,8 @@
-// main.js (方案A：JS server 嵌入主進程，不再額外 spawn Electron/Node 子進程)
-// - 不做 Mica 預熱，保留 autoShowFirstToggle 行為
-// - Python 仍為獨立 server.exe，優雅關閉 /shutdown
-// - JS server 改為 require 方式嵌入，避免多實例造成視窗狂閃
-//
-// 若需重新啟動 JS server，可在 restartServices 中加入自定 reload 邏輯 (目前僅重啟 Python)
+// main.js
+// main.js
+// main.js
+// main.js
+// main.js
 
 const { configManager } = require("./configManager");
 const { app, Tray, Menu, dialog, shell, globalShortcut, nativeImage, ipcMain, BrowserWindow, screen } = require("electron");
@@ -12,9 +11,10 @@ const path = require("path");
 const fs = require("fs");
 const { spawn, exec } = require("child_process");
 const net = require("net");
-const isPyPacked = false;
+const isPyPacked = true;
 const devMode = false; // 開發模式
 const { initDataHub } = require("./dataHub");
+const { setTimeout } = require("timers/promises");
 
 // ------------------ Mica ------------------
 let MicaBrowserWindow;
@@ -33,12 +33,14 @@ let mainWin = null;
 let mediaWin = null;
 let refreshWindowsPreference = true; // 是否允許創建視窗
 
+let dataHub = null;
 let isPlaying = false;
 let isImmOn = false;
 let windowsVisible = false;
 let lastMediaVisible = false; // Track last media window visibility state
 const autoShowFirstToggle = true;
 let scaleMgr = null; // Scale manager instance
+globalThis.__dataHub = dataHub;
 
 const PY_PORT = 54321;
 const MAX_RESTART = 5;
@@ -84,6 +86,26 @@ function debugPaths() {
   writeLog("PATH", `userData=${app.getPath("userData")}`);
   writeLog("PATH", `logsDir=${logsDir}`);
   writeLog("MICA", micaLoadError ? "載入失敗: " + micaLoadError.message : "載入成功");
+}
+
+// ------------------ 輪詢 /health ------------------
+async function waitForBackendReady({ port = PY_PORT, maxWaitMs = 15000, intervalMs = 300 } = {}) {
+  const url = `http://127.0.0.1:${port}/health`;
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 1500);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        const j = await res.json().catch(() => ({}));
+        if (j && j.ok) return true;
+      }
+    } catch {}
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return false;
 }
 
 // ------------------ Port / Process 工具 ------------------
@@ -140,13 +162,16 @@ async function startPythonServer() {
     return;
   }
 
-  const exe = resourcePath("servers", "py", "mediaServer.exe");
+  const exe = resourcePath("pyserver.exe");
   if (!fs.existsSync(exe)) {
-    writeLog("PY", `缺少 mediaServer.exe: ${exe}`);
+    writeLog("PY", `缺少 pyserver.exe: ${exe}`);
     backendIssueFlag = true;
     refreshTrayMenu();
     return;
   }
+
+  const configDirOnDisk = resourcePath("config"); // 開發時是 electron_app/config；打包後是 resources/app/config
+  if (!fs.existsSync(configDirOnDisk)) fs.mkdirSync(configDirOnDisk, { recursive: true });
 
   writeLog("PY", `啟動 ${exe}`);
   try {
@@ -154,7 +179,11 @@ async function startPythonServer() {
       cwd: path.dirname(exe),
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        EVE_CONFIG_DIR: configDirOnDisk, // 關鍵：告訴後端 config 在哪
+        EVE_LOG: "1", // 可選：開啟後端日誌方便排查
+      },
     });
   } catch (e) {
     writeLog("PY-ERR", "spawn 失敗: " + e.message);
@@ -264,6 +293,17 @@ function restartServices() {
   gracefulStopPython({ timeoutMs: 2500, fallbackKill: true }).then(() => {
     setTimeout(() => {
       startPythonServer();
+      // 等後端起來再強制刷新（dataHub 在上方已初始化並常駐）
+      waitForBackendReady({ port: PY_PORT, maxWaitMs: 20000, intervalMs: 300 }).then((ok) => {
+        writeLog("SYS", `Backend health after restart: ${ok}`);
+        try {
+          // 這裡假設你把 dataHub 提升到外層變數，或封裝在可取得的範圍
+          // 若 dataHub 是區域變數，請將其提到外層，例如 let dataHub = null; 初始化後賦值。
+          if (ok && typeof globalThis.__dataHub === "object" && typeof globalThis.__dataHub.refreshAll === "function") {
+            globalThis.__dataHub.refreshAll();
+          }
+        } catch {}
+      });
       restarting = false;
     }, 600);
   });
@@ -409,12 +449,18 @@ app.whenReady().then(async () => {
   startPythonServer();
   createWindowsIfNeeded();
 
-  const dataHub = initDataHub({
+  dataHub = initDataHub({
     getWindows: () => [mainWin, mediaWin],
     pyPort: PY_PORT,
     pollIntervals: POLL_INTERVALS,
   });
   dataHub.start();
+
+  waitForBackendReady({ port: PY_PORT, maxWaitMs: 20000, intervalMs: 300 }).then((ok) => {
+    writeLog("INIT", `Backend health after start: ${ok}`);
+    if (ok) dataHub.refreshAll();
+  });
+
   app.once("before-quit", () => dataHub.stop());
 
   // Initialize scale manager first
