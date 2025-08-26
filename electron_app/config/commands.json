@@ -153,6 +153,22 @@
       "output_ok": "Launched: tetr.io"
     },
     {
+      "id": "apps.appleMusic",
+      "name": "App: Apple Music",
+      "prefix": "app",
+      "cmds": ["am"],
+      "action": { "type": "open_shortcut", "name": "Am.lnk" },
+      "output_ok": "Launched: Apple Music"
+    },
+    {
+      "id": "apps.youtubeMusic",
+      "name": "App: YouTube Music",
+      "prefix": "app",
+      "cmds": ["ym"],
+      "action": { "type": "open_shortcut", "name": "Ym.lnk" },
+      "output_ok": "Launched: YouTube Music"
+    },
+    {
       "id": "zen.search",
       "name": "Search: Google",
       "prefix": "zen",
