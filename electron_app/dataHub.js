@@ -59,6 +59,19 @@ function initDataHub({ getWindows, pyPort = 54321, pollIntervals = {} }) {
     return await res.json();
   }
 
+  // Health check function
+  async function waitForServerReady(timeoutMs = 10000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const data = await httpGetJson("/health");
+        if (data && data.ok) return true;
+      } catch {}
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    return false;
+  }
+
   async function pollDisk() {
     try {
       const data = await httpGetJson("/disk");
@@ -99,11 +112,7 @@ function initDataHub({ getWindows, pyPort = 54321, pollIntervals = {} }) {
     timers.quote = setInterval(pollQuote, intv.quote);
     timers.media = setInterval(pollMedia, intv.media);
 
-    // 啟動即跑一次（但注意視窗尚未載入時，資料可能被丟掉 → 我們有快取可補）
-    pollDisk();
-    pollRecyclebin();
-    pollQuote();
-    pollMedia();
+    refreshAll(); // 啟動時立即刷新一次
   }
 
   function stopPollers() {
@@ -115,6 +124,7 @@ function initDataHub({ getWindows, pyPort = 54321, pollIntervals = {} }) {
 
   // 立即刷新一次（給 Main 在後端健康時呼叫）
   async function refreshAll() {
+    console.log("DataHub: refreshAll called");
     await Promise.allSettled([pollDisk(), pollRecyclebin(), pollQuote(), pollMedia()]);
   }
 
@@ -149,6 +159,7 @@ function initDataHub({ getWindows, pyPort = 54321, pollIntervals = {} }) {
     stop: stopPollers,
     refreshAll,
     replayTo,
+    waitForServerReady,
   };
 }
 

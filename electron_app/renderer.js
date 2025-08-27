@@ -435,13 +435,6 @@
         setImmersive(on);
       });
     }
-    const immBtnOn = document.querySelector("[data-eve-immersive-on]");
-    const immBtnOff = document.querySelector("[data-eve-immersive-off]");
-    if (immBtnOn) immBtnOn.addEventListener("click", () => setImmersive(true));
-    if (immBtnOff) immBtnOff.addEventListener("click", () => setImmersive(false));
-
-    const refreshBtn = document.querySelector("[data-eve-refresh-all]");
-    if (refreshBtn) refreshBtn.addEventListener("click", () => api.refreshAll());
   }
 
   function setImmersive(on) {
@@ -511,9 +504,5 @@
     // Start date/time updates every second
     updateDateTime();
     setInterval(updateDateTime, 1000);
-
-    // 要求 Main 立刻拉一次所有非即時資料（Main 收到後會 broadcast）
-    api.refreshAll();
-    console.debug("[EVE] Renderer started. Waiting IPC updates from Main...");
   });
 })();
