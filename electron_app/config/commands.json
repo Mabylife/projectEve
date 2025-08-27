@@ -91,7 +91,7 @@
       "id": "eve.autofocus.on",
       "name": "Eve: Auto Focus On",
       "prefix": "eve",
-      "cmds": ["autofocus on"],
+      "cmds": ["autofocus on", "af on"],
       "action": { "type": "function", "name": "autofocus_on" },
       "output_ok": "Auto focus on"
     },
@@ -99,7 +99,7 @@
       "id": "eve.autofocus.off",
       "name": "Eve: Auto Focus Off",
       "prefix": "eve",
-      "cmds": ["autofocus off"],
+      "cmds": ["autofocus off", "af off"],
       "action": { "type": "function", "name": "autofocus_off" },
       "output_ok": "Auto focus off"
     },
