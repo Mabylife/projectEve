@@ -464,7 +464,7 @@ for ($i=0; $i -lt $recycleBin.Items().Count; $i++) { $size += $recycleBin.Items(
 async def get_dailyquote():
     try:
         async with httpx.AsyncClient(timeout=5, verify=False) as client:
-            resp = await client.get("https://api.quotable.io/quotes/random")
+            resp = await client.get("https://api.quotable.io/quotes/random?maxLength=150")
             resp.raise_for_status()
             data = resp.json()
             if isinstance(data, list):
