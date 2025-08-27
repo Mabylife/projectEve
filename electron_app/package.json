@@ -1,15 +1,18 @@
 {
   "name": "project-eve",
-  "version": "1.2.0",
-  "description": "Project Eve - Life quality terminal",
-  "author": "Mabylife",
-  "license": "MIT",
+  "version": "2.0.0",
+  "description": "Project Eve - A life quality desktop terminal",
+  "productName": "ProjectEve",
+  "appId": "com.mabylife.projecteve",
   "private": true,
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
-    "build": "electron-builder --win portable"
+    "build": "electron-builder --win nsis",
+    "build:nsis": "electron-builder --win nsis",
+    "build:dir": "electron-builder --dir",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "child-process": "^1.0.2",
@@ -25,28 +28,48 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "com.mabylife.projecteve",
-    "productName": "ProjectEve",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "icons"
+    },
     "files": [
-      "**/*"
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "configManager.js",
+      "scaleManager.js",
+      "dataHub.js",
+      "pages/**/*",
+      "icons/**/*",
+      "assets/**/*"
     ],
-    "asar": false,
+    "extraResources": [
+      {
+        "from": "../EveServer.exe",
+        "to": "app/EveServer.exe"
+      }
+    ],
     "win": {
+      "icon": "icons/app.ico",
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
             "x64"
           ]
         }
-      ],
-      "icon": "icons/app.ico"
+      ]
     },
-    "portable": {
-      "artifactName": "ProjectEve-Portable-${version}.exe"
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ProjectEve",
+      "artifactName": "ProjectEve-Setup-${version}.exe"
     }
-  },
-  "engines": {
-    "node": ">=22.18.0"
   }
 }
