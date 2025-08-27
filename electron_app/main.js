@@ -137,7 +137,7 @@ async function startPythonServer() {
     return;
   }
 
-  const exe = resourcePath("pyserver.exe");
+  const exe = resourcePath("servers", "py", "pyserver.exe");
   if (!fs.existsSync(exe)) {
     writeLog("PY", `缺少 pyserver.exe: ${exe}`);
     backendIssueFlag = true;
@@ -145,8 +145,8 @@ async function startPythonServer() {
     return;
   }
 
-  const configDirOnDisk = resourcePath("config"); // 開發時是 electron_app/config；打包後是 resources/app/config
-  if (!fs.existsSync(configDirOnDisk)) fs.mkdirSync(configDirOnDisk, { recursive: true });
+  // 關鍵：統一使用 userData/config 作為實際運行的設定目錄
+  const configDirOnDisk = await configManager.ensureConfigDir();
 
   writeLog("PY", `啟動 ${exe}`);
   try {
@@ -156,8 +156,8 @@ async function startPythonServer() {
       windowsHide: true,
       env: {
         ...process.env,
-        EVE_CONFIG_DIR: configDirOnDisk, // 關鍵：告訴後端 config 在哪
-        EVE_LOG: "1", // 可選：開啟後端日誌方便排查
+        EVE_CONFIG_DIR: configDirOnDisk, // 傳給 Python，與 Electron 一致
+        EVE_LOG: "1",
       },
     });
   } catch (e) {
