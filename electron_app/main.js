@@ -1,5 +1,15 @@
 // main.js
 
+if (process.platform === "win32") {
+  try {
+    if (require("electron-squirrel-startup")) {
+      process.exit(0); // 不要用 app.quit()，此時 app 可能尚未初始化
+    }
+  } catch (e) {
+    // 模組不存在就忽略，避免打包後崩潰
+  }
+}
+
 const { configManager } = require("./configManager");
 const { app, Tray, Menu, dialog, shell, globalShortcut, nativeImage, ipcMain, BrowserWindow, screen } = require("electron");
 const { initScaleManager } = require("./scaleManager");
@@ -10,6 +20,7 @@ const net = require("net");
 const isPyPacked = true; // 是否打包成 exe
 const devMode = false; // 開發模式
 const { initDataHub } = require("./dataHub");
+const { ensureUserDataExtras, getTrayIconPath } = require("./utils/persistence");
 
 // ------------------ Mica ------------------
 let MicaBrowserWindow;
@@ -56,12 +67,30 @@ let backendIssueFlag = false;
 
 const isPackaged = app.isPackaged;
 
-function resourcePath(...segments) {
-  if (isPackaged) {
-    return path.join(process.resourcesPath, "app", ...segments);
-  } else {
-    return path.join(__dirname, ...segments);
-  }
+// 路徑工具：asar 內與 resources 根目錄分開處理
+function appFile(...segments) {
+  // asar 內（HTML、icons 等）
+  if (isPackaged) return path.join(app.getAppPath(), ...segments); // 指向 app.asar
+  return path.join(__dirname, ...segments);
+}
+function resFile(...segments) {
+  // resources 根目錄（外部二進位、DLL 等）
+  if (isPackaged) return path.join(process.resourcesPath, ...segments);
+  // 開發時預設也從專案目錄找
+  return path.join(__dirname, ...segments);
+}
+function getBinaryPath(name) {
+  // 打包後：resources/bin/<name>
+  // 開發時：<repo>/bin/<name>（可依你開發目錄調整）
+  const packagedPath = resFile("bin", name);
+  if (fs.existsSync(packagedPath)) return packagedPath;
+
+  const devFallback = path.join(__dirname, "bin", name);
+  if (fs.existsSync(devFallback)) return devFallback;
+
+  // 你原本的開發 exe 位置（若需要，可再加一層 fallback）
+  const legacyDev = path.join(__dirname, "electorn_app", "servers", "py", name);
+  return legacyDev;
 }
 
 // ------------------ 日誌 ------------------
@@ -77,6 +106,7 @@ function writeLog(tag, msg) {
 function debugPaths() {
   writeLog("PATH", `app.isPackaged=${app.isPackaged}`);
   writeLog("PATH", `process.resourcesPath=${process.resourcesPath}`);
+  writeLog("PATH", `app.getAppPath()=${app.getAppPath()}`);
   writeLog("PATH", `__dirname=${__dirname}`);
   writeLog("PATH", `userData=${app.getPath("userData")}`);
   writeLog("PATH", `logsDir=${logsDir}`);
@@ -137,7 +167,7 @@ async function startPythonServer() {
     return;
   }
 
-  const exe = resourcePath("EveServer.exe");
+  const exe = getBinaryPath("EveServer.exe"); // 重要：改為 resources/bin/EveServer.exe
   if (!fs.existsSync(exe)) {
     writeLog("PY", `缺少 EveServer.exe: ${exe}`);
     backendIssueFlag = true;
@@ -248,7 +278,7 @@ async function gracefulStopPython(options = {}) {
       } catch {}
     }
     pyProc = null;
-    taskkillByName("server.exe", "PY-KILL");
+    taskkillByName("EveServer.exe", "PY-KILL"); // 更正名稱
   }
 }
 
@@ -289,7 +319,7 @@ function createWindowsIfNeeded() {
     transparent: true,
     skipTaskbar: true,
     focusable: true,
-    alwaysOnTop: alwaysOnTop,
+    alwaysOnTop: true,
     show: false,
     webPreferences: {
       nodeIntegration: true,
@@ -306,7 +336,7 @@ function createWindowsIfNeeded() {
     writeLog("MICA", "主視窗效果設定失敗: " + e.message);
   }
 
-  const primaryHtml = resourcePath("./pages/primary.html");
+  const primaryHtml = appFile("pages", "primary.html");
   if (fs.existsSync(primaryHtml)) mainWin.loadFile(primaryHtml);
   else writeLog("WIN", "缺少 primary.html: " + primaryHtml);
 
@@ -327,7 +357,7 @@ function createWindowsIfNeeded() {
     transparent: true,
     skipTaskbar: true,
     focusable: false,
-    alwaysOnTop: alwaysOnTop,
+    alwaysOnTop: true,
     show: false,
     webPreferences: {
       nodeIntegration: true,
@@ -343,7 +373,7 @@ function createWindowsIfNeeded() {
     writeLog("MICA", "媒體視窗效果設定失敗: " + e.message);
   }
 
-  const mediaHtml = resourcePath("./pages/mediaCard.html");
+  const mediaHtml = appFile("pages", "mediaCard.html");
   if (fs.existsSync(mediaHtml)) mediaWin.loadFile(mediaHtml);
   else writeLog("WIN", "缺少 mediaCard.html: " + mediaHtml);
 
@@ -403,6 +433,10 @@ function showWindows() {
 // app.whenReady()
 app.whenReady().then(async () => {
   debugPaths();
+
+  // 先建立/補齊使用者資料與預設檔
+  ensureUserDataExtras();
+
   createTray();
   registerShortcuts();
   startPythonServer();
@@ -614,13 +648,11 @@ function refreshTrayMenu() {
 }
 
 function createTray() {
-  // 1) 避免重複建立
   if (tray && typeof tray.isDestroyed === "function" && !tray.isDestroyed()) {
     writeLog("TRAY", "Tray already exists. Skip creating a new one.");
     refreshTrayMenu();
     return;
   }
-  // 2) 如果有殘留就先清掉
   if (tray && typeof tray.destroy === "function") {
     try {
       tray.destroy();
@@ -628,14 +660,10 @@ function createTray() {
     tray = null;
   }
 
-  let iconPath = resourcePath("icons", "tray_icon.png");
-  if (!fs.existsSync(iconPath)) {
-    const icoFallback = resourcePath("icons", "app.ico");
-    if (fs.existsSync(icoFallback)) iconPath = icoFallback;
-  }
-  if (!fs.existsSync(iconPath)) {
-    writeLog("TRAY", "找不到圖示: " + iconPath);
-    dialog.showErrorBox("Tray 圖示缺失", "找不到 tray_icon.png 或 app.ico");
+  const iconPath = getTrayIconPath();
+  if (!iconPath) {
+    writeLog("TRAY", "找不到托盤圖示（tray_icon.ico/.png 或 app.ico）");
+    dialog.showErrorBox("Tray 圖示缺失", "找不到托盤圖示（tray_icon.ico/.png 或 app.ico）");
     return;
   }
   const img = nativeImage.createFromPath(iconPath);
@@ -643,7 +671,7 @@ function createTray() {
   refreshTrayMenu();
   tray.setToolTip("Project Eve");
   tray.on("double-click", toggleWindows);
-  writeLog("TRAY", "Tray 建立完成");
+  writeLog("TRAY", "Tray 建立完成，icon=" + iconPath);
 }
 
 // ------------------ 快捷鍵 ------------------

@@ -7,8 +7,9 @@
   "private": true,
   "main": "main.js",
   "scripts": {
-    "dev": "electron .",
-    "start": "electron .",
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
     "build": "electron-builder --win nsis",
     "build:nsis": "electron-builder --win nsis",
     "build:dir": "electron-builder --dir",
@@ -20,9 +21,13 @@
     "fs": "^0.0.1-security",
     "mica-electron": "^1.5.16",
     "promises": "^0.2.5",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "electron-squirrel-startup": "^1.0.1"
   },
   "devDependencies": {
+    "@electron-forge/cli": "^7.8.3",
+    "@electron-forge/maker-squirrel": "^7.8.3",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.8.3",
     "@electron/rebuild": "^4.0.1",
     "electron": "^37.3.1",
     "electron-builder": "^26.0.12"
@@ -47,7 +52,7 @@
     "extraResources": [
       {
         "from": "../EveServer.exe",
-        "to": "app/EveServer.exe"
+        "to": "bin/EveServer.exe"
       }
     ],
     "win": {

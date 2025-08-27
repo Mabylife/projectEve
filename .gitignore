@@ -2,3 +2,4 @@ electron_app/node_modules/*
 electron_app/dist/
 py_server/*
 !py_server/pyserver.py
+electron_app/out/
