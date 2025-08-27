@@ -7,7 +7,7 @@ const path = require("path");
 const fs = require("fs");
 const { spawn, exec } = require("child_process");
 const net = require("net");
-const isPyPacked = true;
+const isPyPacked = true; // 是否打包成 exe
 const devMode = false; // 開發模式
 const { initDataHub } = require("./dataHub");
 

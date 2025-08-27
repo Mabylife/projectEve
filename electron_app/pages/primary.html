@@ -8,24 +8,26 @@
   </head>
   <body data-page="primary">
     <div class="mainCard LG">
-      <div class="upperPart immOff">
-        <section class="daily_quote alphaSection">
-          <small>/ daily_quote</small>
-          <p class="quote" id="quote" data-eve-quote-text></p>
-          <p class="author normal" id="quote-author" data-eve-quote-author></p>
-        </section>
-        <section class="imm">
-          <small class="fetch-status">/ media</small>
-          <div>
-            <img class="song-thumbnail" src="assets/defaultThumbnail.svg" alt="" data-eve-media-thumb />
-            <div class="rightPart">
-              <div><span class="small">Song</span><span class="normal song-title" data-eve-media-title>--</span></div>
-              <div><span class="small">Author</span><span class="normal song-author" data-eve-media-author>--</span></div>
-              <div><span class="small">Time</span><span class="normal song-time" data-eve-media-time>--</span></div>
-              <p class="normal progress-bar">[--------------------]</p>
+      <div class="upperPart">
+        <div id="part1" class="immOff">
+          <section class="daily_quote alphaSection" id="daily_quote">
+            <small>/ daily_quote</small>
+            <p class="quote" id="quote" data-eve-quote-text></p>
+            <p class="author normal" id="quote-author" data-eve-quote-author></p>
+          </section>
+          <section class="imm" id="imm">
+            <small class="fetch-status">/ media</small>
+            <div>
+              <img class="song-thumbnail" src="assets/defaultThumbnail.svg" alt="" data-eve-media-thumb />
+              <div class="rightPart">
+                <div><span class="small">Song</span><span class="normal song-title" data-eve-media-title>--</span></div>
+                <div><span class="small">Author</span><span class="normal song-author" data-eve-media-author>--</span></div>
+                <div><span class="small">Time</span><span class="normal song-time" data-eve-media-time>--</span></div>
+                <p class="normal progress-bar">[--------------------]</p>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
         <section class="status">
           <small>/ status</small>
           <div>
@@ -67,6 +69,8 @@
         position: relative;
         width: 1200px;
         height: 700px;
+        flex-shrink: 0;
+        flex-grow: 0;
       }
     </style>
 

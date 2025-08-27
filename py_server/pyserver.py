@@ -645,6 +645,10 @@ def _run_builtin_function(name: str, arg: Optional[str] = None):
         url = f"https://duckduckgo.com/?q={q_enc}"
         ok = open_url(url)
         return ok, flags
+    
+    elif name == "toggle_full_console":
+        ok = True
+        flags = {"isToggleFullConsole": True}
 
     else:
         ok = False

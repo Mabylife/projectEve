@@ -62,9 +62,9 @@
       "output_ok": "Media stopped"
     },
     {
-      "id": "media.immersive",
+      "id": "eve.immersive",
       "name": "Media: Toggle Immersive",
-      "prefix": "m",
+      "prefix": "eve",
       "cmds": ["imm", "immersive"],
       "action": { "type": "function", "name": "toggle_immersive" },
       "output_ok": "Media toggled immersive mode"
@@ -143,7 +143,14 @@
       "action": { "type": "function", "name": "reconnect" },
       "output_ok": "Reconnecting..."
     },
-
+    {
+      "id": "eve.toggle_full_console",
+      "name": "Eve: Toggle Full Console",
+      "prefix": "eve",
+      "cmds": ["full", "full console", "toggle full console", "fc"],
+      "action": { "type": "function", "name": "toggle_full_console" },
+      "output_ok": "Toggled full console mode"
+    },
     {
       "id": "apps.tetr",
       "name": "App: tetr.io",

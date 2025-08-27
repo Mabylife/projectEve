@@ -175,7 +175,7 @@
   // UI 更新（綁定到實際 DOM）
   // ------------------------
   function updateMediaUI() {
-    let displayTime = `${state.media.position || "--"} / ${state.media.duration || "--"}`;
+    let displayTime = `${state.media.position.toFixed(0) || "--"} / ${state.media.duration.toFixed(0) || "--"}`;
     setText(document.querySelector("[data-eve-media-title]"), state.media.title || "");
     setText(document.querySelector("[data-eve-media-status]"), state.media.status || "");
     setImg(document.querySelector("[data-eve-media-thumb]"), state.media.thumbnail || "../assets/defaultThumbnail.svg");
@@ -322,15 +322,21 @@
         if (res && res.ok && res.data) {
           const outputContainer = document.querySelector("#terminalOutput") || document.querySelector("[data-eve-console-output]");
           if (outputContainer && res.data.output) {
-            res.data.output.forEach((line) => {
-              const p = document.createElement("p");
-              p.className = "small";
-              p.textContent = line;
-              if (res.data.success === false) {
-                p.style.color = "red";
-              }
-              outputContainer.appendChild(p);
-            });
+            if (!res.data.isClearOutput) {
+              res.data.output.forEach((line) => {
+                const p = document.createElement("p");
+                p.className = "small";
+                p.textContent = line;
+                if (res.data.success === false) {
+                  p.style.color = "red";
+                }
+                outputContainer.appendChild(p);
+                p.classList.add("appear");
+                setTimeout(() => {
+                  p.classList.remove("appear");
+                }, 200);
+              });
+            }
 
             // Scroll to bottom
             outputContainer.scrollTop = outputContainer.scrollHeight;
@@ -356,18 +362,30 @@
               // Clear terminal output
               if (outputContainer) {
                 if (res.data.isFullClear) {
-                  outputContainer.innerHTML = "";
+                  outputContainer.classList.add("bounceRightAndDisappear");
+                  setTimeout(() => {
+                    outputContainer.classList.remove("bounceRightAndDisappear");
+                    outputContainer.innerHTML = "";
+                  }, 300);
                 } else {
                   // Clear all output except initial help messages
                   const helpMessages = ["use - or / to use prefix commands", "use help prefix to get more info"];
-                  outputContainer.innerHTML = "";
-                  // Add back the first two help messages
-                  helpMessages.forEach((msg) => {
-                    const p = document.createElement("p");
-                    p.className = "small";
-                    p.textContent = msg;
-                    outputContainer.appendChild(p);
-                  });
+                  outputContainer.classList.add("bounceRightAndDisappear");
+                  setTimeout(() => {
+                    outputContainer.classList.remove("bounceRightAndDisappear");
+                    outputContainer.innerHTML = "";
+                    // Add back the first two help messages
+                    helpMessages.forEach((msg) => {
+                      const p = document.createElement("p");
+                      p.className = "small";
+                      p.textContent = msg;
+                      outputContainer.appendChild(p);
+                      p.classList.add("appear");
+                      setTimeout(() => {
+                        p.classList.remove("appear");
+                      }, 200);
+                    });
+                  }, 300);
                 }
               }
             }
@@ -385,6 +403,39 @@
             if (res.data.isChangeQuote) {
               // Refresh quote
               api.refreshAll();
+            }
+            if (res.data.isToggleFullConsole !== undefined) {
+              const root = document.documentElement;
+              const upperPart = document.querySelector(".upperPart");
+              const eveConsole = document.querySelector(".eve_console");
+              if (root.classList.contains("full_console")) {
+                eveConsole.classList.add("shorten");
+                setTimeout(() => {
+                  eveConsole.classList.remove("shorten");
+                  // Scroll to bottom
+                  outputContainer.scrollTop = outputContainer.scrollHeight;
+                  root.classList.remove("full_console");
+                  upperPart.classList.add("appear");
+                  setTimeout(() => {
+                    upperPart.classList.remove("appear");
+                  }, 200);
+                }, 300);
+              } else {
+                upperPart.classList.add("bounceRightAndDisappear");
+                setTimeout(() => {
+                  upperPart.classList.remove("bounceRightAndDisappear");
+                  root.classList.add("full_console");
+                  eveConsole.classList.add("heighten");
+                  setImmersive(false);
+                  setTimeout(() => {
+                    eveConsole.classList.remove("heighten");
+                    // Scroll to bottom
+                    outputContainer.scrollTop = outputContainer.scrollHeight;
+                  }, 300);
+                }, 300);
+              }
+              // Scroll to bottom
+              outputContainer.scrollTop = outputContainer.scrollHeight;
             }
           }
         }
@@ -441,21 +492,35 @@
     state.isImmOn = !!on;
     setAttr(document.body, "data-immersive", String(state.isImmOn));
 
-    // 切換 upperPart 的 class
-    const upperPart = document.querySelector(".upperPart");
+    const upperPart = document.querySelector("#part1");
+    const imm = document.querySelector("#imm");
+    const dailyQuote = document.querySelector("#daily_quote");
 
     if (upperPart) {
       if (state.isImmOn) {
         // 進入 immersive 模式
-        upperPart.classList.remove("immOff");
-        upperPart.classList.add("immOn");
-
-        // 重新綁定媒體數據到新的 DOM 元素
-        updateMediaUI();
+        dailyQuote.classList.add("bounceRightAndDisappear");
+        setTimeout(() => {
+          dailyQuote.classList.remove("bounceRightAndDisappear");
+          dailyQuote.style.order = 2;
+          imm.style.order = 1;
+          imm.classList.add("appear");
+          setTimeout(() => {
+            imm.classList.remove("appear");
+          }, 200);
+        }, 300);
       } else {
         // 退出 immersive 模式
-        upperPart.classList.remove("immOn");
-        upperPart.classList.add("immOff");
+        imm.classList.add("bounceRightAndDisappear");
+        setTimeout(() => {
+          imm.classList.remove("bounceRightAndDisappear");
+          imm.style.order = 2;
+          dailyQuote.style.order = 1;
+          dailyQuote.classList.add("appear");
+          setTimeout(() => {
+            dailyQuote.classList.remove("appear");
+          }, 200);
+        }, 300);
       }
     }
 
