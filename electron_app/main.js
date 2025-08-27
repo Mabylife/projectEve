@@ -137,9 +137,9 @@ async function startPythonServer() {
     return;
   }
 
-  const exe = resourcePath("servers", "py", "pyserver.exe");
+  const exe = resourcePath("EveServer.exe");
   if (!fs.existsSync(exe)) {
-    writeLog("PY", `缺少 pyserver.exe: ${exe}`);
+    writeLog("PY", `缺少 EveServer.exe: ${exe}`);
     backendIssueFlag = true;
     refreshTrayMenu();
     return;
