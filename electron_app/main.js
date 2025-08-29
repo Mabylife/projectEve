@@ -117,18 +117,19 @@ function debugPaths() {
 function isPortInUse(port) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
+    let settled = false;
+    const done = (result) => {
+      if (settled) return;
+      settled = true;
+      try {
+        socket.destroy();
+      } catch {}
+      resolve(result);
+    };
     socket.setTimeout(600);
-    socket.once("connect", () => {
-      socket.destroy();
-      resolve(true);
-    });
-    socket.once("timeout", () => {
-      socket.destroy();
-      resolve(false);
-    });
-    socket.once("error", () => {
-      resolve(false);
-    });
+    socket.once("connect", () => done(true));
+    socket.once("timeout", () => done(false));
+    socket.once("error", () => done(false));
     socket.connect(port, "127.0.0.1");
   });
 }
@@ -175,19 +176,22 @@ async function startPythonServer() {
     return;
   }
 
-  // 關鍵：統一使用 userData/config 作為實際運行的設定目錄
-  const configDirOnDisk = await configManager.ensureConfigDir();
-
   writeLog("PY", `啟動 ${exe}`);
   try {
+    // 假設 exePath 是 EveServer.exe 的完整路徑
+    const userConfigDir = path.join(app.getPath("userData"), "config");
+    // 確保資料夾存在（可選，但建議）
+    try {
+      fs.mkdirSync(userConfigDir, { recursive: true });
+    } catch {}
+
     pyProc = spawn(exe, [], {
       cwd: path.dirname(exe),
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
       env: {
         ...process.env,
-        EVE_CONFIG_DIR: configDirOnDisk, // 傳給 Python，與 Electron 一致
-        EVE_LOG: "1",
+        EVE_CONFIG_DIR: userConfigDir,
       },
     });
   } catch (e) {
@@ -283,7 +287,7 @@ async function gracefulStopPython(options = {}) {
 }
 
 // ------------------ 重啟服務 (僅重啟 Python) ------------------
-function restartServices() {
+async function restartServices() {
   if (restarting) {
     writeLog("SYS", "忽略：正在重啟中");
     return;
@@ -295,7 +299,13 @@ function restartServices() {
   backendIssueFlag = false;
   refreshTrayMenu();
 
-  gracefulStopPython({ timeoutMs: 2500, fallbackKill: true });
+  await gracefulStopPython({ timeoutMs: 2500, fallbackKill: true });
+
+  setTimeout(() => {
+    writeLog("SYS", "重啟服務：啟動 Python");
+    restarting = false;
+    startPythonServer();
+  }, 800);
 }
 
 // ------------------ 視窗 ------------------
@@ -555,6 +565,9 @@ app.whenReady().then(async () => {
       }
     }, 2000);
   }
+
+  //mem logger
+  startMemLogger();
 });
 
 function hideWindows() {
@@ -758,6 +771,18 @@ async function cleanExit() {
   writeLog("SYS", "清理完成");
 }
 
+const MEMORY_LOG_INTERVAL = 5 * 60 * 1000;
+let memLogTimer = null;
+function startMemLogger() {
+  try {
+    if (memLogTimer) clearInterval(memLogTimer);
+    memLogTimer = setInterval(() => {
+      const m = process.memoryUsage();
+      writeLog("MEM", `rss=${(m.rss / 1e6).toFixed(1)}MB ` + `heapUsed=${(m.heapUsed / 1e6).toFixed(1)}MB ` + `ext=${(m.external / 1e6).toFixed(1)}MB`);
+    }, MEMORY_LOG_INTERVAL);
+  } catch {}
+}
+
 app.on("before-quit", (e) => {
   if (!exiting) {
     e.preventDefault();
@@ -766,6 +791,7 @@ app.on("before-quit", (e) => {
       app.exit(0);
     });
   }
+  if (memLogTimer) clearInterval(memLogTimer);
 });
 
 // ------------------ 例外 ------------------

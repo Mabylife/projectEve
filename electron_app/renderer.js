@@ -24,6 +24,8 @@
     if (el) el.src = src || "";
   };
 
+  const getDefaultThumbnail = () => "../assets/defaultThumbnail.svg";
+
   // ------------------------
   // 狀態
   // ------------------------
@@ -127,16 +129,34 @@
     return "stopped";
   }
 
-  function handleMediaSnapshotList(list) {
-    const first = Array.isArray(list) ? list[0] : null;
-    if (!first) return;
+  function setMediaStoppedState() {
+    state.media.status = "stopped";
+    state.media.statusName = "Stopped";
+    state.media.title = "--";
+    state.media.author = "--";
+    state.media.thumbnail = getDefaultThumbnail();
+    state.media.duration = null;
+    state.media.position = null;
+  }
 
-    state.media.title = first.title || null;
-    state.media.author = first.artist || null; // Extract artist field as author
+  function handleMediaSnapshotList(list) {
+    const hasItem = Array.isArray(list) && list.length > 0;
+    const first = hasItem ? list[0] : null;
+
+    if (!first) {
+      // 無任何播放來源 → 顯示預設停止狀態與預設縮圖
+      setMediaStoppedState();
+      updateMediaUI();
+      reflectMediaToMain();
+      return;
+    }
+
+    state.media.title = first.title || "--";
+    state.media.author = first.artist || "--"; // Extract artist field as author
     state.media.status = normalizeMediaStatus(first.state);
-    state.media.thumbnail = first.thumbnail || null;
-    state.media.duration = first.duration ?? null;
-    state.media.position = first.position ?? null;
+    state.media.thumbnail = first.thumbnail || getDefaultThumbnail();
+    state.media.duration = typeof first.duration === "number" ? first.duration : null;
+    state.media.position = typeof first.position === "number" ? first.position : null;
     state.media.statusName = first.state || null;
 
     updateMediaUI();
@@ -156,9 +176,10 @@
         state.media.status = pkt.mediaStatus;
       }
       const meta = pkt.meta || {};
-      if (typeof meta.title !== "undefined") state.media.title = meta.title;
-      if (typeof meta.artist !== "undefined") state.media.author = meta.artist;
+      if (typeof meta.title !== "undefined") state.media.title = meta.title || "--";
+      if (typeof meta.artist !== "undefined") state.media.author = meta.artist || "--";
       if (typeof meta.statusName !== "undefined") state.media.statusName = meta.statusName;
+      if (typeof meta.thumbnail !== "undefined") state.media.thumbnail = meta.thumbnail || getDefaultThumbnail();
       updateMediaUI();
       reflectMediaToMain();
     }
@@ -174,13 +195,22 @@
   // ------------------------
   // UI 更新（綁定到實際 DOM）
   // ------------------------
+  function isNum(v) {
+    return typeof v === "number" && Number.isFinite(v);
+  }
+  function formatTimePart(v) {
+    return isNum(v) ? String(Math.floor(v)) : "--";
+  }
+
   function updateMediaUI() {
-    let displayTime = `${state.media.position.toFixed(0) || "--"} / ${state.media.duration.toFixed(0) || "--"}`;
-    setText(document.querySelector("[data-eve-media-title]"), state.media.title || "");
-    setText(document.querySelector("[data-eve-media-status]"), state.media.status || "");
-    setImg(document.querySelector("[data-eve-media-thumb]"), state.media.thumbnail || "../assets/defaultThumbnail.svg");
-    setText(document.querySelector("[data-eve-media-author]"), state.media.author || "");
-    setText(document.querySelector("[data-eve-media-time]"), displayTime || "");
+    const displayTime = `${formatTimePart(state.media.position)} / ${formatTimePart(state.media.duration)}`;
+    const statusDisplay = state.media.statusName || state.media.status || "";
+
+    setText(document.querySelector("[data-eve-media-title]"), state.media.title || "--");
+    setText(document.querySelector("[data-eve-media-status]"), statusDisplay);
+    setImg(document.querySelector("[data-eve-media-thumb]"), state.media.thumbnail || getDefaultThumbnail());
+    setText(document.querySelector("[data-eve-media-author]"), state.media.author || "--");
+    setText(document.querySelector("[data-eve-media-time]"), displayTime);
 
     // 更新進度條 (僅在 immersive 模式)
     const progressBar = document.querySelector(".progress-bar");
@@ -195,17 +225,13 @@
   }
 
   function renderProgressBar(position, duration, totalBars = 20) {
-    if (typeof position !== "number" || typeof duration !== "number" || duration === 0) {
+    if (typeof position !== "number" || typeof duration !== "number" || duration === 0 || !Number.isFinite(position) || !Number.isFinite(duration)) {
       return "[--------------------]";
     }
-    const progress = Math.floor((position / duration) * totalBars);
+    const progress = Math.max(0, Math.min(totalBars - 1, Math.floor((position / duration) * totalBars)));
     let bar = "[";
     for (let i = 0; i < totalBars; i++) {
-      if (i === progress) {
-        bar += "O";
-      } else {
-        bar += "-";
-      }
+      bar += i === progress ? "O" : "-";
     }
     bar += "]";
     return bar;

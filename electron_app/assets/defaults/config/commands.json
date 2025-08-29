@@ -107,7 +107,7 @@
       "id": "eve.clean",
       "name": "Eve: Clear Output",
       "prefix": "eve",
-      "cmds": ["clean"],
+      "cmds": ["clean", "cls"],
       "action": { "type": "function", "name": "clear_output" },
       "output_ok": "Output cleared"
     },
@@ -115,7 +115,7 @@
       "id": "eve.clean.full",
       "name": "Eve: Clear Output (Full)",
       "prefix": "eve",
-      "cmds": ["clean full"],
+      "cmds": ["clean full", "clean f", "cls full", "cls f"],
       "action": { "type": "function", "name": "clear_output_full" },
       "output_ok": "Full output cleared"
     },
@@ -147,9 +147,30 @@
       "id": "eve.toggle_full_console",
       "name": "Eve: Toggle Full Console",
       "prefix": "eve",
-      "cmds": ["full", "full console", "toggle full console", "fc"],
+      "cmds": ["full console", "fc"],
       "action": { "type": "function", "name": "toggle_full_console" },
       "output_ok": "Toggled full console mode"
+    },
+    {
+      "id": "open-config",
+      "prefix": "eve",
+      "cmds": ["config"],
+      "name": "Open config folder",
+      "action": { "type": "function", "name": "open_config_dir" }
+    },
+    {
+      "id": "open-shortcuts",
+      "prefix": "eve",
+      "cmds": ["shortcuts"],
+      "name": "Open shortcuts folder",
+      "action": { "type": "function", "name": "open_shortcuts_dir" }
+    },
+    {
+      "id": "open-logs",
+      "prefix": "eve",
+      "cmds": ["logs"],
+      "name": "Open logs folder",
+      "action": { "type": "function", "name": "open_logs_dir" }
     },
     {
       "id": "apps.tetr",
@@ -192,6 +213,19 @@
       "args_mode": "free",
       "action": { "type": "function", "name": "auto_dir_search" },
       "output_ok": "Searching (Auto direct)..."
+    },
+    {
+      "id": "wallpaper.next",
+      "name": "Wallpaper next",
+      "prefix": "wp",
+      "cmds": ["next"],
+      "action": {
+        "type": "send_vk",
+        "keys": ["0x11", "0x10", "0x12", 49],
+        "mode": "combo",
+        "hold_ms": 50
+      },
+      "output_ok": "Changing wallpaper to next..."
     }
   ]
 }
